@@ -24,8 +24,9 @@ jobs:
       # (setup-android@v3 cassé : package 'tools' inexistant).
       - name: Accept licenses + install platform 34
         run: |
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
 
       # Pas de gradle wrapper commité dans le repo → on installe Gradle 8.7
       # (requis par Android Gradle Plugin 8.5.2) directement sur le runner.
