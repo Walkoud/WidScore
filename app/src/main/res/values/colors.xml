@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="wid_accent">#7DD3FC</color>
+    <color name="wid_live">#FF5F56</color>
+    <color name="wid_text">#F0F0F0</color>
+    <color name="wid_dim">#8A8E96</color>
+    <color name="wid_card">#18191C</color>
+</resources>
