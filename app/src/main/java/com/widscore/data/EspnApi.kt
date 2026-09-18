@@ -18,7 +18,7 @@ object EspnApi {
     // Statut dernière synchro par ligue (affiché dans l'app : erreurs, rate limit 429).
     data class LeagueStatus(val league: String, val ok: Boolean, val count: Int, val rateLimited: Boolean)
     // Backfill schedules par équipe suivie (matchs terminés hors fenêtre CDN).
-    data class ScheduleStatus(val teamId: String, val team: String, val league: String, val ok: Boolean, val count: Int)
+    data class ScheduleStatus(val teamId: String, val team: String, val league: String, val ok: Boolean, val count: Int, val source: String = "")
     @Volatile var lastReport: List<LeagueStatus> = emptyList()
     @Volatile var lastSchedules: List<ScheduleStatus> = emptyList()
     @Volatile var lastSyncAt: Long = 0L
@@ -70,25 +70,59 @@ object EspnApi {
     }
 
     suspend fun getTeamSchedule(leagueSlug: String, teamId: String, teamName: String = ""): List<EspnMatch> {
-        val body = get(
+        val name = teamName.ifBlank { teamId }
+        // 1. site.web.api (source Palisades).
+        var list = fetchSchedule(
             "https://site.web.api.espn.com/apis/site/v2/sports/soccer/" +
-                "${Uri.encode(leagueSlug)}/teams/${Uri.encode(teamId)}/schedule"
+                "${Uri.encode(leagueSlug)}/teams/${Uri.encode(teamId)}/schedule", leagueSlug
         )
-        if (body == null) {
-            lastSchedules = (lastSchedules.filter { it.teamId != teamId } +
-                ScheduleStatus(teamId, teamName.ifBlank { teamId }, leagueSlug, false, 0)).takeLast(20)
-            return emptyList()
+        var source = "web.api"
+        // 2. site.api (même payload, autre host si Akamai bloque).
+        if (list == null) {
+            list = fetchSchedule(
+                "https://site.api.espn.com/apis/site/v2/sports/soccer/" +
+                    "${Uri.encode(leagueSlug)}/teams/${Uri.encode(teamId)}/schedule", leagueSlug
+            )
+            source = "site.api"
         }
+        // 3. CDN dates sweep : scoreboard jour par jour (6 jours passés), filtré équipe.
+        if (list == null) {
+            list = sweepPast(leagueSlug, teamId)
+            source = "cdn-dates"
+        }
+        val final = list ?: emptyList()
+        lastSchedules = (lastSchedules.filter { it.teamId != teamId } +
+            ScheduleStatus(teamId, name, leagueSlug, list != null, final.size, source)).takeLast(20)
+        return final
+    }
+
+    private suspend fun fetchSchedule(url: String, leagueSlug: String): List<EspnMatch>? {
+        val (body, _) = getWithCode(url)
+        if (body == null) return null
+        return try { parseSchedule(body, leagueSlug) } catch (_: Exception) { null }
+    }
+
+    // Balaye les 6 derniers jours du scoreboard CDN pour une équipe
+    // (matchs terminés déjà sortis de la fenêtre courante).
+    private suspend fun sweepPast(leagueSlug: String, teamId: String): List<EspnMatch>? {
         return try {
-            val list = parseSchedule(body, leagueSlug)
-            lastSchedules = (lastSchedules.filter { it.teamId != teamId } +
-                ScheduleStatus(teamId, teamName.ifBlank { teamId }, leagueSlug, true, list.size)).takeLast(20)
-            list
-        } catch (_: Exception) {
-            lastSchedules = (lastSchedules.filter { it.teamId != teamId } +
-                ScheduleStatus(teamId, teamName.ifBlank { teamId }, leagueSlug, false, 0)).takeLast(20)
-            emptyList()
-        }
+            val out = mutableListOf<EspnMatch>()
+            val sdf = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US)
+            val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+            for (d in 1..6) {
+                cal.timeInMillis = System.currentTimeMillis()
+                cal.add(java.util.Calendar.DAY_OF_YEAR, -d)
+                val url = "https://cdn.espn.com/core/soccer/scoreboard?league=" +
+                    Uri.encode(leagueSlug.trim()) + "&dates=" + sdf.format(cal.time) + "&xhr=1"
+                val (body, _) = getWithCode(url)
+                if (body == null) continue
+                try {
+                    out += parseScoreboard(body, leagueSlug)
+                        .filter { it.home.id == teamId || it.away.id == teamId }
+                } catch (_: Exception) {}
+            }
+            out
+        } catch (_: Exception) { null }
     }
 
     // Tri Palisades CompareMatches : live > à venir (date) > terminés.

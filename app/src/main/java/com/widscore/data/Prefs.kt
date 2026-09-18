@@ -109,6 +109,7 @@ object Prefs {
                 .put("schedules", JSONArray(schedules.map {
                     JSONObject().put("teamId", it.teamId).put("team", it.team)
                         .put("league", it.league).put("ok", it.ok).put("count", it.count)
+                        .put("source", it.source)
                 }))
             ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
                 .putString(KEY_REPORT, o.toString()).apply()
@@ -143,7 +144,7 @@ object Prefs {
                 slist.add(
                     EspnApi.ScheduleStatus(
                         l.optString("teamId"), l.optString("team"), l.optString("league"),
-                        l.optBoolean("ok"), l.optInt("count")
+                        l.optBoolean("ok"), l.optInt("count"), l.optString("source", "")
                     )
                 )
             }

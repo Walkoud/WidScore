@@ -210,13 +210,17 @@ class MainActivity : AppCompatActivity() {
         val sb = StringBuilder()
         sb.append(getString(R.string.sync_ok, time, rep.totalMatches)).append("\n")
         sb.append(getString(R.string.sync_leagues, ok, rep.leagues.size))
+        for (lg in rep.leagues) {
+            sb.append("\n• ${lg.league}: ${lg.count}")
+        }
         if (rep.hiddenOld > 0) {
             val hours = settings().finishedHours
             sb.append("\n").append(getString(R.string.sync_hidden, rep.hiddenOld, hours))
         }
         for (sch in rep.schedules) {
             sb.append("\n• ${sch.team}: ")
-            sb.append(if (sch.ok) "${sch.count}" else getString(R.string.sync_failed_short))
+            sb.append(if (sch.ok) "${sch.count}" + if (sch.source.isNotBlank()) " (${sch.source})" else ""
+            else getString(R.string.sync_failed_short))
         }
         val failed = rep.leagues.filter { !it.ok }
         if (failed.isNotEmpty()) {
