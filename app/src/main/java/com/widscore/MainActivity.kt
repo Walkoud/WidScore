@@ -349,7 +349,7 @@ class MainActivity : AppCompatActivity() {
         val s = settings()
         bindIntSpinner(R.id.sp_refresh, listOf(1, 5, 10, 15, 30, 60), s.refreshMinutes) { c, v -> c.refreshMinutes = v }
         bindIntSpinner(R.id.sp_max, listOf(4, 6, 8, 10, 12, 20, 30), s.maxMatches) { c, v -> c.maxMatches = v }
-        bindIntSpinner(R.id.sp_finished_hours, listOf(0, 6, 12, 24, 48, 168), s.finishedHours) { c, v -> c.finishedHours = v }
+        bindIntSpinner(R.id.sp_finished_hours, listOf(0, 6, 12, 24, 48, 168, 336, 720), s.finishedHours) { c, v -> c.finishedHours = v }
 
         val scaleLabels = listOf("70%", "85%", "100%", "115%", "130%")
         val scaleVals = listOf(0.7f, 0.85f, 1.0f, 1.15f, 1.3f)
