@@ -163,9 +163,20 @@ object WidgetRenderer {
         return item
     }
 
-    // Item dark spec : carte #1E1E1E, blasons + heure/score centrés, codes dessous.
+    // Item dark spec : layout selon block size (S 52dp / M 64dp / L 78dp) + scale textes.
     fun buildDarkItem(ctx: Context, m: EspnMatch, s: FootballSettings): RemoteViews {
-        val item = RemoteViews(ctx.packageName, R.layout.widget_item_dark)
+        val layout = when (s.blockSize) {
+            "small" -> R.layout.widget_item_dark_s
+            "large" -> R.layout.widget_item_dark_l
+            else -> R.layout.widget_item_dark
+        }
+        // Tailles de base par variante (× widgetScale).
+        val (baseCode, baseMain, baseSub) = when (s.blockSize) {
+            "small" -> Triple(10f, 12f, 8f)
+            "large" -> Triple(12f, 16f, 9f)
+            else -> Triple(11f, 14f, 8f)
+        }
+        val item = RemoteViews(ctx.packageName, layout)
         item.setTextViewText(R.id.home_code, triCode(m.home.name, m.home.abbr))
         item.setTextViewText(R.id.away_code, triCode(m.away.name, m.away.abbr))
         val (main, sub, subColor) = when {
@@ -184,6 +195,11 @@ object WidgetRenderer {
         item.setTextViewText(R.id.center_sub, sub)
         item.setViewVisibility(R.id.center_sub, if (sub.isEmpty()) View.GONE else View.VISIBLE)
         try { item.setTextColor(R.id.center_sub, Color.parseColor(subColor)) } catch (_: Exception) {}
+        val k = s.widgetScale.coerceIn(0.7f, 1.3f)
+        item.setTextViewTextSize(R.id.home_code, android.util.TypedValue.COMPLEX_UNIT_SP, baseCode * k)
+        item.setTextViewTextSize(R.id.away_code, android.util.TypedValue.COMPLEX_UNIT_SP, baseCode * k)
+        item.setTextViewTextSize(R.id.center_main, android.util.TypedValue.COMPLEX_UNIT_SP, baseMain * k)
+        item.setTextViewTextSize(R.id.center_sub, android.util.TypedValue.COMPLEX_UNIT_SP, baseSub * k)
         if (s.showCrests) {
             CrestCache.get(m.home.logo)?.let { item.setImageViewBitmap(R.id.home_crest, it) }
             CrestCache.get(m.away.logo)?.let { item.setImageViewBitmap(R.id.away_crest, it) }
@@ -197,12 +213,10 @@ object WidgetRenderer {
     // Perso widgets : scale textes (70-130%), compact (masque ligue + sous-titres),
     // showLeague (ligne ligue classic).
     fun applyItemScale(item: RemoteViews, m: EspnMatch, s: FootballSettings, dark: Boolean) {
-        val k = s.widgetScale.coerceIn(0.7f, 1.3f)
+        // Facteur bloc (S 0.9 / L 1.1) combiné au scale textes.
+        val block = when (s.blockSize) { "small" -> 0.9f; "large" -> 1.1f; else -> 1.0f }
+        val k = (s.widgetScale.coerceIn(0.7f, 1.3f) * block).coerceIn(0.6f, 1.4f)
         if (dark) {
-            item.setTextViewTextSize(R.id.home_code, android.util.TypedValue.COMPLEX_UNIT_SP, 11f * k)
-            item.setTextViewTextSize(R.id.away_code, android.util.TypedValue.COMPLEX_UNIT_SP, 11f * k)
-            item.setTextViewTextSize(R.id.center_main, android.util.TypedValue.COMPLEX_UNIT_SP, 14f * k)
-            item.setTextViewTextSize(R.id.center_sub, android.util.TypedValue.COMPLEX_UNIT_SP, 8f * k)
             if (s.compact && !m.isLive) item.setViewVisibility(R.id.center_sub, View.GONE)
         } else {
             item.setTextViewTextSize(R.id.status, android.util.TypedValue.COMPLEX_UNIT_SP, 10f * k)

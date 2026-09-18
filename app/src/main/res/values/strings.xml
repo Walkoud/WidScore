@@ -60,6 +60,10 @@
     <string name="sync_hidden">%1$d finished hidden by retention (%2$dh) — raise “Keep finished”</string>
     <string name="sync_failed_short">failed</string>
     <string name="set_scale">Widget text size</string>
+    <string name="set_block">Match block size</string>
+    <string name="block_small">Small</string>
+    <string name="block_normal">Normal</string>
+    <string name="block_large">Large</string>
     <string name="set_compact">Compact mode</string>
     <string name="set_date_format">Date format</string>
     <string name="fmt_text">Text (Sep 10)</string>

@@ -1,12 +1,10 @@
 package com.widscore.data
 
 import android.content.Context
-import android.os.LocaleList
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
 import java.util.Locale
 
 // Langue app + widgets : anglais par défaut, français en option.
+// Application manuelle (sans AppCompatDelegate : aucun intent externe).
 object Lang {
     const val EN = "en"
     const val FR = "fr"
@@ -17,15 +15,23 @@ object Lang {
         val s = Prefs.load(ctx)
         s.lang = if (lang == FR) FR else EN
         Prefs.save(ctx, s)
-        apply(lang)
-    }
-
-    fun apply(lang: String) {
-        AppCompatDelegate.setApplicationLocales(LocaleListCompat.create(Locale(lang)))
+        applyLocale(ctx)
     }
 
     fun applySaved(ctx: Context) {
-        apply(current(ctx))
+        applyLocale(ctx)
+    }
+
+    fun applyLocale(ctx: Context) {
+        val locale = localeOf(ctx)
+        Locale.setDefault(locale)
+        try {
+            val res = ctx.resources
+            val config = android.content.res.Configuration(res.configuration)
+            config.setLocale(locale)
+            @Suppress("DEPRECATION")
+            res.updateConfiguration(config, res.displayMetrics)
+        } catch (_: Exception) {}
     }
 
     fun localeOf(ctx: Context): Locale = Locale(current(ctx))
@@ -35,7 +41,6 @@ object Lang {
         return try {
             val config = android.content.res.Configuration(ctx.resources.configuration)
             config.setLocale(localeOf(ctx))
-            config.setLocales(LocaleList(localeOf(ctx)))
             ctx.createConfigurationContext(config)
         } catch (_: Exception) { ctx }
     }

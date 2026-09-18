@@ -60,6 +60,10 @@
     <string name="sync_hidden">%1$d terminés masqués par rétention (%2$dh) — augmentez « Garder terminés »</string>
     <string name="sync_failed_short">échec</string>
     <string name="set_scale">Taille textes widgets</string>
+    <string name="set_block">Taille blocs match</string>
+    <string name="block_small">Petit</string>
+    <string name="block_normal">Normal</string>
+    <string name="block_large">Grand</string>
     <string name="set_compact">Mode compact</string>
     <string name="set_date_format">Format dates</string>
     <string name="fmt_text">Texte (10 sept.)</string>

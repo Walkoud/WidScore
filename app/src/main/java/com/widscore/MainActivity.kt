@@ -282,7 +282,7 @@ class MainActivity : AppCompatActivity() {
 
         for (lg in CuratedLeagues.all.filter {
             nq.isEmpty() || RosterStore.norm(it.name).contains(nq) || it.slug.contains(nq)
-        }.take(if (nq.isEmpty()) 4 else 8)) {
+        }.take(4)) {
             searchResults.addView(favCheck("🏆 ${lg.name}", favIds.contains("league:${lg.slug}")) { v ->
                 val cur = settings()
                 if (v) cur.teams.add(FavTeam(lg.slug, lg.name, "league"))
@@ -291,8 +291,8 @@ class MainActivity : AppCompatActivity() {
             })
             added++
         }
-        val teams = if (nq.isEmpty()) directory.sortedBy { it.name }.take(20)
-        else RosterStore.search(directory, q)
+        val teams = if (nq.isEmpty()) directory.sortedBy { it.name }.take(4)
+        else RosterStore.search(directory, q).take(4)
         for (t in teams) {
             val label = "⭐ ${t.name}" + if (t.abbr.isNotBlank()) " (${t.abbr})" else ""
             searchResults.addView(favCheck(label, favIds.contains("team:${t.id}")) { v ->
@@ -356,6 +356,12 @@ class MainActivity : AppCompatActivity() {
         val scaleIdx = scaleVals.indexOfFirst { it == s.widgetScale }.takeIf { it >= 0 } ?: 2
         bindStrSpinner(R.id.sp_scale, scaleLabels, scaleIdx) { c, p -> c.widgetScale = scaleVals[p] }
 
+        val blockLabels = listOf(getString(R.string.block_small), getString(R.string.block_normal), getString(R.string.block_large))
+        val blockVals = listOf("small", "normal", "large")
+        bindStrSpinner(R.id.sp_block, blockLabels, blockVals.indexOf(s.blockSize).takeIf { it >= 0 } ?: 1) { c, p ->
+            c.blockSize = blockVals[p]
+        }
+
         val fmtLabels = listOf(getString(R.string.fmt_text), getString(R.string.fmt_numeric), getString(R.string.fmt_daynumeric))
         val fmtVals = listOf("text", "numeric", "daynumeric")
         bindStrSpinner(R.id.sp_datefmt, fmtLabels, fmtVals.indexOf(s.dateFormat).takeIf { it >= 0 } ?: 2) { c, p ->
@@ -390,19 +396,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun spinnerAdapter(options: List<String>): ArrayAdapter<String> {
+        val a = ArrayAdapter(this, R.layout.spinner_item, options)
+        a.setDropDownViewResource(R.layout.spinner_dropdown)
+        return a
+    }
+
     private fun bindIntSpinner(id: Int, options: List<Int>, current: Int, apply: (FootballSettings, Int) -> Unit) {
         val sp = findViewById<Spinner>(id)
-        sp.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, options)
+        sp.adapter = spinnerAdapter(options.map { it.toString() })
         sp.onItemSelectedListener = null
         sp.setSelection(maxOf(0, options.indexOf(current)))
         sp.onItemSelectedListener = guardListener {
-            val c = settings(); apply(c, sp.selectedItem as Int); persist(c)
+            val c = settings(); apply(c, options[sp.selectedItemPosition]); persist(c)
         }
     }
 
     private fun bindStrSpinner(id: Int, options: List<String>, current: Int, apply: (FootballSettings, Int) -> Unit) {
         val sp = findViewById<Spinner>(id)
-        sp.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, options)
+        sp.adapter = spinnerAdapter(options)
         sp.onItemSelectedListener = null
         sp.setSelection(current)
         sp.onItemSelectedListener = guardListener {

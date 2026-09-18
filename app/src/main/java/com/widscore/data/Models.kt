@@ -89,6 +89,7 @@ data class FootballSettings(
     var lang: String = "en", // en | fr
     // Personnalisation widgets.
     var widgetScale: Float = 1.0f, // 0.7 - 1.3 taille textes items
+    var blockSize: String = "normal", // small | normal | large : taille blocs match
     var compact: Boolean = false, // masque lignes ligue + sous-titres non-live
     var showLeague: Boolean = true // ligne ligue dans item classic
 )

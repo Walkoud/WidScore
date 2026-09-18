@@ -42,6 +42,7 @@ object Prefs {
         .put("dateFormat", s.dateFormat)
         .put("lang", s.lang)
         .put("widgetScale", s.widgetScale.toDouble())
+        .put("blockSize", s.blockSize)
         .put("compact", s.compact)
         .put("showLeague", s.showLeague)
 
@@ -76,6 +77,8 @@ object Prefs {
         s.dateFormat = if (df == "numeric" || df == "daynumeric") df else "text"
         s.lang = if (o.optString("lang") == "fr") "fr" else "en"
         s.widgetScale = o.optDouble("widgetScale", 1.0).toFloat().coerceIn(0.7f, 1.3f)
+        val bs = o.optString("blockSize", "normal")
+        s.blockSize = if (bs == "small" || bs == "large") bs else "normal"
         s.compact = o.optBoolean("compact", false)
         s.showLeague = o.optBoolean("showLeague", true)
         return s
