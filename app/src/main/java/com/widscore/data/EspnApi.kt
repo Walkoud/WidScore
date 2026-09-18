@@ -208,12 +208,7 @@ object EspnApi {
         return if (url.startsWith("http://", ignoreCase = true)) "https://" + url.substring(7) else url
     }
 
-    private fun parseDateUtc(s: String): Long {
-        if (s.isBlank()) return 0L
-        return try {
-            java.time.OffsetDateTime.parse(s).toInstant().toEpochMilli()
-        } catch (_: Exception) { 0L }
-    }
+    // Tri Palisades CompareMatches : live > à venir (date) > terminés.
     fun sortMatches(list: List<EspnMatch>): List<EspnMatch> =
         list.sortedWith(compareBy({ !it.isLive }, { it.isFinished }, { it.utcMillis }))
 
