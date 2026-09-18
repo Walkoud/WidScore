@@ -20,6 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.widscore.data.CuratedLeagues
@@ -33,8 +34,11 @@ import com.widscore.widget.WidgetUpdateWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-// Config : ligues + auto-search directory monde + favoris chips + réglages + langue EN/FR.
+// Pages bas : Teams (search + favs) | Leagues (liste + favs) | Settings (sync + perso + langue).
 class MainActivity : AppCompatActivity() {
 
     private lateinit var leaguesBox: LinearLayout
@@ -44,8 +48,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var searchResults: LinearLayout
     private lateinit var searchStatus: TextView
     private lateinit var dirProgress: ProgressBar
-    private lateinit var favsChips: ChipGroup
-    private lateinit var favsBox: LinearLayout
+    private lateinit var favTeamsChips: ChipGroup
+    private lateinit var favLeaguesChips: ChipGroup
+    private lateinit var noFavTeams: TextView
+    private lateinit var noFavLeagues: TextView
+    private lateinit var syncStatus: TextView
 
     private var directory: List<RosterStore.RosterTeam> = emptyList()
     private val searchHandler = Handler(Looper.getMainLooper())
@@ -63,60 +70,104 @@ class MainActivity : AppCompatActivity() {
         searchResults = findViewById(R.id.search_results)
         searchStatus = findViewById(R.id.search_status)
         dirProgress = findViewById(R.id.directory_progress)
-        favsChips = findViewById(R.id.favs_chips)
-        favsBox = findViewById(R.id.favs_box)
+        favTeamsChips = findViewById(R.id.fav_teams_chips)
+        favLeaguesChips = findViewById(R.id.fav_leagues_chips)
+        noFavTeams = findViewById(R.id.no_fav_teams)
+        noFavLeagues = findViewById(R.id.no_fav_leagues)
+        syncStatus = findViewById(R.id.sync_status)
 
         handleMatchIntent()
         buildAll()
 
-        // Auto-search : 400 ms debounce, sans bouton.
-        searchBox.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                searchPending?.let { searchHandler.removeCallbacks(it) }
-                val r = Runnable { renderSearch() }
-                searchPending = r
-                searchHandler.postDelayed(r, 400)
-            }
-        })
-        leaguesFilter.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: Editable?) { renderLeagues() }
-        })
+        findViewById<BottomNavigationView>(R.id.bottom_nav).setOnItemSelectedListener { item ->
+            showPage(
+                when (item.itemId) {
+                    R.id.nav_leagues -> R.id.page_leagues
+                    R.id.nav_settings -> R.id.page_settings
+                    else -> R.id.page_teams
+                }
+            )
+            true
+        }
+
+        searchBox.addTextChangedListener(watcher { renderSearch() })
+        leaguesFilter.addTextChangedListener(watcher { renderLeagues() })
 
         findViewById<Button>(R.id.btn_refresh_now).setOnClickListener { refreshNow() }
         findViewById<Button>(R.id.btn_refresh_big).setOnClickListener { refreshNow() }
         findViewById<Button>(R.id.btn_lang_en).setOnClickListener { setLang(Lang.EN) }
         findViewById<Button>(R.id.btn_lang_fr).setOnClickListener { setLang(Lang.FR) }
+        findViewById<Button>(R.id.btn_reload_teams).setOnClickListener { reloadTeams() }
+        findViewById<Button>(R.id.btn_reload_all).setOnClickListener { reloadTeams() }
 
-        // Directory monde en fond : abonnées d'abord, puis curated (copie EnsureWorldRosters).
+        startWarm()
+        renderSync()
+    }
+
+    private fun watcher(go: () -> Unit) = object : TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        override fun afterTextChanged(s: Editable?) {
+            searchPending?.let { searchHandler.removeCallbacks(it) }
+            val r = Runnable { go() }
+            searchPending = r
+            searchHandler.postDelayed(r, 400)
+        }
+    }
+
+    private fun showPage(id: Int) {
+        findViewById<View>(R.id.page_teams).visibility = if (id == R.id.page_teams) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.page_leagues).visibility = if (id == R.id.page_leagues) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.page_settings).visibility = if (id == R.id.page_settings) View.VISIBLE else View.GONE
+    }
+
+    // --- Directory : dit qu'elle charge, reste en données (cache disque 30j) ---
+    private fun startWarm() {
         lifecycleScope.launch {
             directory = withContext(Dispatchers.IO) { RosterStore.loadCached(this@MainActivity) }
+            updateDirStatus(0, 0)
             renderSearch()
             val subs = withContext(Dispatchers.IO) { Prefs.load(this@MainActivity).leagues }
             val ordered = (subs + CuratedLeagues.all.map { it.slug }).distinct()
             withContext(Dispatchers.IO) {
                 RosterStore.warm(this@MainActivity, ordered) { done, total ->
                     runOnUiThread {
-                        if (total > 0) {
-                            dirProgress.visibility = View.VISIBLE
-                            dirProgress.max = total
-                            dirProgress.progress = done
-                            searchStatus.text = getString(R.string.directory_loading, done, total)
-                        } else {
-                            dirProgress.visibility = View.GONE
-                        }
+                        updateDirStatus(done, total)
                         directory = RosterStore.loadCached(this@MainActivity)
                         renderSearch()
                     }
                 }
             }
-            dirProgress.visibility = View.GONE
             directory = withContext(Dispatchers.IO) { RosterStore.loadCached(this@MainActivity) }
-            searchStatus.text = getString(R.string.directory_ready, directory.size)
+            updateDirStatus(-1, -1)
             renderSearch()
+        }
+    }
+
+    private fun updateDirStatus(done: Int, total: Int) {
+        if (total > 0) {
+            dirProgress.visibility = View.VISIBLE
+            dirProgress.max = total
+            dirProgress.progress = done
+            searchStatus.text = getString(R.string.directory_loading, done, total)
+        } else if (done == -1) {
+            dirProgress.visibility = View.GONE
+            searchStatus.text = getString(R.string.directory_ready, directory.size)
+        } else {
+            dirProgress.visibility = View.GONE
+            searchStatus.text = if (directory.isEmpty()) getString(R.string.w_loading)
+            else getString(R.string.directory_ready, directory.size)
+        }
+    }
+
+    private fun reloadTeams() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { RosterStore.clearCache(this@MainActivity) }
+            directory = emptyList()
+            updateDirStatus(0, 0)
+            renderSearch()
+            startWarm()
+            refreshNow()
         }
     }
 
@@ -133,7 +184,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleMatchIntent() {
         if (intent?.action == BaseScoreProvider.ACTION_MATCH) {
-            val title = intent.getStringExtra(MatchListServiceTitle.EXTRA_TITLE) ?: "Match"
+            val title = intent.getStringExtra("title") ?: "Match"
+            // Clic match -> Google avec les 2 noms d'équipes (défaut).
             if (Prefs.load(this).matchClickAction == "google") {
                 try {
                     startActivity(
@@ -144,6 +196,27 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, title, Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    // --- Sync status : rate limit ESPN visible ---
+    private fun renderSync() {
+        val rep = Prefs.loadReport(this)
+        if (rep == null) {
+            syncStatus.text = getString(R.string.sync_never)
+            return
+        }
+        val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(rep.at))
+        val ok = rep.leagues.count { it.ok }
+        val sb = StringBuilder()
+        sb.append(getString(R.string.sync_ok, time, rep.totalMatches)).append("\n")
+        sb.append(getString(R.string.sync_leagues, ok, rep.leagues.size))
+        val failed = rep.leagues.filter { !it.ok }
+        if (failed.isNotEmpty()) {
+            val names = failed.joinToString(", ") { it.league }
+            sb.append("\n").append(getString(R.string.sync_failed, names))
+            if (failed.any { it.rateLimited }) sb.append("\n").append(getString(R.string.sync_ratelimit))
+        }
+        syncStatus.text = sb.toString()
     }
 
     private fun settings() = Prefs.load(this)
@@ -162,11 +235,11 @@ class MainActivity : AppCompatActivity() {
     // --- Ligues (rien coché par défaut) ---
     private fun renderLeagues() {
         val s = settings()
-        val q = leaguesFilter.text.toString().trim().lowercase()
+        val q = RosterStore.norm(leaguesFilter.text.toString())
         leaguesBox.removeAllViews()
         var shown = 0
         for (lg in CuratedLeagues.all.filter {
-            q.isEmpty() || it.name.lowercase().contains(q) || it.slug.contains(q)
+            q.isEmpty() || RosterStore.norm(it.name).contains(q) || it.slug.contains(q)
         }) {
             val cb = CheckBox(this).apply {
                 text = lg.name
@@ -183,11 +256,10 @@ class MainActivity : AppCompatActivity() {
             leaguesBox.addView(cb)
             shown++
         }
-        val n = s.leagues.size
-        leaguesCount.text = "$n / ${CuratedLeagues.all.size} · $shown"
+        leaguesCount.text = "${s.leagues.size} / ${CuratedLeagues.all.size} · $shown"
     }
 
-    // --- Recherche auto : ligues + directory monde ---
+    // --- Recherche auto teams + leagues (fuzzy) ---
     private fun renderSearch() {
         val q = searchBox.text.toString()
         searchResults.removeAllViews()
@@ -214,9 +286,9 @@ class MainActivity : AppCompatActivity() {
             searchResults.addView(favCheck(label, favIds.contains("team:${t.id}")) { v ->
                 val cur = settings()
                 if (v) {
+                    // Suivre équipe UNIQUEMENT : n'abonne plus sa ligue
+                    // (fetch implicite via teamLeagues dans le worker).
                     cur.teams.add(t.toFav())
-                    if (t.leagueSlug.isNotBlank() && cur.leagues.none { it.equals(t.leagueSlug, ignoreCase = true) })
-                        cur.leagues.add(t.leagueSlug) // auto-abonne ligue (copie SetFavorite)
                 } else cur.teams.removeAll { it.id == t.id && it.kind == "team" }
                 persist(cur); renderFavs(); renderLeagues(); renderSearch()
             })
@@ -233,35 +305,58 @@ class MainActivity : AppCompatActivity() {
         return cb
     }
 
-    // --- Favoris : chips supprimables ---
+    // --- Favoris séparés : chips teams / leagues ---
     private fun renderFavs() {
         val s = settings()
-        favsChips.removeAllViews()
-        favsBox.removeAllViews()
-        if (s.teams.isEmpty()) {
-            favsBox.addView(TextView(this).apply { text = getString(R.string.no_favorites) })
-            return
-        }
-        for (t in s.teams) {
-            val chip = Chip(this).apply {
-                text = (if (t.kind == "league") "🏆 " else "⭐ ") + t.name
-                isCloseIconVisible = true
-            }
-            chip.setOnCloseIconClickListener {
-                val cur = settings()
-                cur.teams.removeAll { it.id == t.id && it.kind == t.kind }
-                persist(cur); renderFavs(); renderLeagues(); renderSearch()
-            }
-            favsChips.addView(chip)
-        }
+        favTeamsChips.removeAllViews()
+        favLeaguesChips.removeAllViews()
+        val teams = s.teams.filter { it.kind != "league" }
+        val leagues = s.teams.filter { it.kind == "league" }
+        noFavTeams.visibility = if (teams.isEmpty()) View.VISIBLE else View.GONE
+        noFavLeagues.visibility = if (leagues.isEmpty()) View.VISIBLE else View.GONE
+        for (t in teams) favTeamsChips.addView(favChip("⭐ " + t.name) {
+            val cur = settings()
+            cur.teams.removeAll { it.id == t.id && it.kind == t.kind }
+            persist(cur); renderFavs(); renderSearch()
+        })
+        for (t in leagues) favLeaguesChips.addView(favChip("🏆 " + t.name) {
+            val cur = settings()
+            cur.teams.removeAll { it.id == t.id && it.kind == t.kind }
+            persist(cur); renderFavs(); renderLeagues(); renderSearch()
+        })
     }
 
-    // --- Réglages ---
+    private fun favChip(label: String, onDelete: () -> Unit): Chip {
+        val chip = Chip(this).apply { text = label; isCloseIconVisible = true }
+        chip.setOnCloseIconClickListener { onDelete() }
+        return chip
+    }
+
+    // --- Réglages perso ---
     private fun buildSpinners() {
         val s = settings()
         bindIntSpinner(R.id.sp_refresh, listOf(1, 5, 10, 15, 30, 60), s.refreshMinutes) { c, v -> c.refreshMinutes = v }
         bindIntSpinner(R.id.sp_max, listOf(4, 6, 8, 10, 12, 20, 30), s.maxMatches) { c, v -> c.maxMatches = v }
         bindIntSpinner(R.id.sp_finished_hours, listOf(0, 6, 12, 24, 48, 168), s.finishedHours) { c, v -> c.finishedHours = v }
+
+        val scaleLabels = listOf("70%", "85%", "100%", "115%", "130%")
+        val scaleVals = listOf(0.7f, 0.85f, 1.0f, 1.15f, 1.3f)
+        val scaleIdx = scaleVals.indexOfFirst { it == s.widgetScale }.takeIf { it >= 0 } ?: 2
+        bindStrSpinner(R.id.sp_scale, scaleLabels, scaleIdx) { c, p -> c.widgetScale = scaleVals[p] }
+
+        val fmtLabels = listOf(getString(R.string.fmt_text), getString(R.string.fmt_numeric), getString(R.string.fmt_daynumeric))
+        val fmtVals = listOf("text", "numeric", "daynumeric")
+        bindStrSpinner(R.id.sp_datefmt, fmtLabels, fmtVals.indexOf(s.dateFormat).takeIf { it >= 0 } ?: 2) { c, p ->
+            c.dateFormat = fmtVals[p]
+        }
+
+        val colLabels = listOf(getString(R.string.col_gray), getString(R.string.col_white), getString(R.string.col_accent))
+        val colVals = listOf("#808080", "#FFFFFF", "#7DD3FC")
+        val curCol = if (s.finishedTextColor.isBlank()) "#808080" else s.finishedTextColor.uppercase()
+        bindStrSpinner(R.id.sp_fincolor, colLabels, colVals.indexOf(curCol).takeIf { it >= 0 } ?: 0) { c, p ->
+            c.finishedTextColor = colVals[p]
+        }
+
         val posLabels = listOf(getString(R.string.pos_top), getString(R.string.pos_bottom))
         bindStrSpinner(R.id.sp_finished_pos, posLabels, if (s.finishedPosition == "top") 0 else 1) { c, p ->
             c.finishedPosition = if (p == 0) "top" else "bottom"
@@ -270,13 +365,16 @@ class MainActivity : AppCompatActivity() {
         bindStrSpinner(R.id.sp_click, clickLabels, if (s.matchClickAction == "google") 1 else 0) { c, p ->
             c.matchClickAction = if (p == 1) "google" else "details"
         }
-        findViewById<CheckBox>(R.id.cb_crests).apply {
-            setOnCheckedChangeListener(null); isChecked = s.showCrests
-            setOnCheckedChangeListener { _, v -> val c = settings(); c.showCrests = v; persist(c) }
-        }
-        findViewById<CheckBox>(R.id.cb_finished_header).apply {
-            setOnCheckedChangeListener(null); isChecked = s.showFinishedHeader
-            setOnCheckedChangeListener { _, v -> val c = settings(); c.showFinishedHeader = v; persist(c) }
+        bindCheck(R.id.cb_crests, s.showCrests) { c, v -> c.showCrests = v }
+        bindCheck(R.id.cb_finished_header, s.showFinishedHeader) { c, v -> c.showFinishedHeader = v }
+        bindCheck(R.id.cb_compact, s.compact) { c, v -> c.compact = v }
+        bindCheck(R.id.cb_show_league, s.showLeague) { c, v -> c.showLeague = v }
+    }
+
+    private fun bindCheck(id: Int, current: Boolean, apply: (FootballSettings, Boolean) -> Unit) {
+        findViewById<CheckBox>(id).apply {
+            setOnCheckedChangeListener(null); isChecked = current
+            setOnCheckedChangeListener { _, v -> val c = settings(); apply(c, v); persist(c) }
         }
     }
 
@@ -308,9 +406,9 @@ class MainActivity : AppCompatActivity() {
         }
         override fun onNothingSelected(p: AdapterView<*>?) {}
     }
-}
 
-// Alias pour extra titre (évite import circulaire widget).
-private object MatchListServiceTitle {
-    const val EXTRA_TITLE = "title"
+    override fun onResume() {
+        super.onResume()
+        renderSync()
+    }
 }

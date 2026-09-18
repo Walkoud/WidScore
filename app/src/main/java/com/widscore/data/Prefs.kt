@@ -10,6 +10,7 @@ object Prefs {
     private const val FILE = "widscore"
     private const val KEY = "settings"
     private const val KEY_CACHE = "widget_cache"
+    private const val KEY_REPORT = "sync_report"
 
     fun load(ctx: Context): FootballSettings {
         val raw = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY, null)
@@ -40,6 +41,9 @@ object Prefs {
         .put("matchClickAction", s.matchClickAction)
         .put("dateFormat", s.dateFormat)
         .put("lang", s.lang)
+        .put("widgetScale", s.widgetScale.toDouble())
+        .put("compact", s.compact)
+        .put("showLeague", s.showLeague)
 
     fun fromJson(o: JSONObject): FootballSettings {
         val s = FootballSettings()
@@ -67,10 +71,13 @@ object Prefs {
         s.showFinishedHeader = o.optBoolean("showFinishedHeader", true)
         s.showFinishedDates = o.optBoolean("showFinishedDates", true)
         s.cardTheme = if (o.optString("cardTheme") == "dark") "dark" else "classic"
-        s.matchClickAction = if (o.optString("matchClickAction") == "google") "google" else "details"
+        s.matchClickAction = if (o.optString("matchClickAction", "google") == "details") "details" else "google"
         val df = o.optString("dateFormat", "daynumeric")
         s.dateFormat = if (df == "numeric" || df == "daynumeric") df else "text"
         s.lang = if (o.optString("lang") == "fr") "fr" else "en"
+        s.widgetScale = o.optDouble("widgetScale", 1.0).toFloat().coerceIn(0.7f, 1.3f)
+        s.compact = o.optBoolean("compact", false)
+        s.showLeague = o.optBoolean("showLeague", true)
         return s
     }
 
@@ -85,6 +92,41 @@ object Prefs {
         } catch (_: Exception) {}
     }
 
+    // Rapport synchro (rate limit 429 visible dans l'app).
+    fun saveReport(ctx: Context, at: Long, report: List<EspnApi.LeagueStatus>, totalMatches: Int) {
+        try {
+            val o = JSONObject()
+                .put("at", at)
+                .put("totalMatches", totalMatches)
+                .put("leagues", JSONArray(report.map {
+                    JSONObject().put("league", it.league).put("ok", it.ok)
+                        .put("count", it.count).put("rate", it.rateLimited)
+                }))
+            ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
+                .putString(KEY_REPORT, o.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    data class SyncReport(val at: Long, val totalMatches: Int, val leagues: List<EspnApi.LeagueStatus>)
+
+    fun loadReport(ctx: Context): SyncReport? {
+        return try {
+            val raw = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_REPORT, null)
+                ?: return null
+            val o = JSONObject(raw)
+            val arr = o.optJSONArray("leagues") ?: JSONArray()
+            val list = mutableListOf<EspnApi.LeagueStatus>()
+            for (i in 0 until arr.length()) {
+                val l = arr.getJSONObject(i)
+                list.add(
+                    EspnApi.LeagueStatus(
+                        l.optString("league"), l.optBoolean("ok"),
+                        l.optInt("count"), l.optBoolean("rate")
+                    )
+                )
+            }
+            SyncReport(o.optLong("at"), o.optInt("totalMatches"), list)
+        } catch (_: Exception) { null }
     fun loadCache(ctx: Context): Pair<Long, List<EspnMatch>> {
         return try {
             val raw = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_CACHE, null)

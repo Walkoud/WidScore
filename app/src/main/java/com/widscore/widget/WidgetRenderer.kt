@@ -19,8 +19,10 @@ object WidgetRenderer {
     const val DIM = "#8A8E96"
 
     // Header fixe : logo + live/heure MAJ + refresh. Contenu localisé.
+    // pressed = bouton ⟳ foncé pendant le refresh, restore normal à la fin (worker).
     fun buildHeader(
-        ctx: Context, dark: Boolean, liveCount: Int, updatedAt: Long, emptySetup: Boolean
+        ctx: Context, dark: Boolean, liveCount: Int, updatedAt: Long, emptySetup: Boolean,
+        pressed: Boolean = false
     ): RemoteViews {
         val lctx = Lang.localizedContext(ctx)
         val views = RemoteViews(ctx.packageName, if (dark) R.layout.widget_dark else R.layout.widget_classic)
@@ -34,6 +36,13 @@ object WidgetRenderer {
             views.setTextViewText(R.id.header_time, time)
         }
         views.setOnClickPendingIntent(R.id.btn_refresh, BaseScoreProvider.refreshIntent(ctx))
+        if (pressed) {
+            // État pressé : icône foncée + heure en suspens, le worker restore le normal.
+            try {
+                views.setTextColor(R.id.btn_refresh, Color.parseColor(if (dark) "#000000" else "#616161"))
+            } catch (_: Exception) {}
+            views.setTextViewText(R.id.header_time, "…")
+        }
         if (!dark) views.setOnClickPendingIntent(R.id.header_title, BaseScoreProvider.openAppIntent(ctx))
         else views.setOnClickPendingIntent(R.id.logo_box, BaseScoreProvider.openAppIntent(ctx))
         // Clic sur item de liste géré par template (factory) ; empty view -> ouvre l'app.
@@ -183,6 +192,26 @@ object WidgetRenderer {
             item.setViewVisibility(R.id.away_crest, View.GONE)
         }
         return item
+    }
+
+    // Perso widgets : scale textes (70-130%), compact (masque ligue + sous-titres),
+    // showLeague (ligne ligue classic).
+    fun applyItemScale(item: RemoteViews, m: EspnMatch, s: FootballSettings, dark: Boolean) {
+        val k = s.widgetScale.coerceIn(0.7f, 1.3f)
+        if (dark) {
+            item.setTextViewTextSize(R.id.home_code, android.util.TypedValue.COMPLEX_UNIT_SP, 11f * k)
+            item.setTextViewTextSize(R.id.away_code, android.util.TypedValue.COMPLEX_UNIT_SP, 11f * k)
+            item.setTextViewTextSize(R.id.center_main, android.util.TypedValue.COMPLEX_UNIT_SP, 14f * k)
+            item.setTextViewTextSize(R.id.center_sub, android.util.TypedValue.COMPLEX_UNIT_SP, 8f * k)
+            if (s.compact && !m.isLive) item.setViewVisibility(R.id.center_sub, View.GONE)
+        } else {
+            item.setTextViewTextSize(R.id.status, android.util.TypedValue.COMPLEX_UNIT_SP, 10f * k)
+            item.setTextViewTextSize(R.id.league, android.util.TypedValue.COMPLEX_UNIT_SP, 9f * k)
+            item.setTextViewTextSize(R.id.home_code, android.util.TypedValue.COMPLEX_UNIT_SP, 12f * k)
+            item.setTextViewTextSize(R.id.away_code, android.util.TypedValue.COMPLEX_UNIT_SP, 12f * k)
+            item.setTextViewTextSize(R.id.score, android.util.TypedValue.COMPLEX_UNIT_SP, 14f * k)
+            if (!s.showLeague || s.compact) item.setViewVisibility(R.id.league, View.GONE)
+        }
     }
 
     // Ligne statut classic (copie BuildRow Palisades).

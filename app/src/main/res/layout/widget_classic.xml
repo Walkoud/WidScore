@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Widget Classic : carte rounded 20dp, header fixe, ListView scrollable, codes 3 lettres. -->
+<!-- Widget Classic : blur transparent arrondi 20dp, header compact, ListView scrollable. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -13,7 +13,7 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="@drawable/header_classic"
-        android:padding="8dp">
+        android:padding="6dp">
 
         <TextView
             android:id="@+id/header_title"
@@ -21,7 +21,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="⚽ WidScore"
-            android:textSize="14sp"
+            android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="#F0F0F0" />
 
@@ -35,7 +35,7 @@
                 android:id="@+id/live_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="10sp"
+                android:textSize="8sp"
                 android:textStyle="bold"
                 android:textColor="#FF5F56" />
 
@@ -43,18 +43,18 @@
                 android:id="@+id/header_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="12sp"
+                android:textSize="10sp"
                 android:textColor="#FFFFFF" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/btn_refresh"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:gravity="center"
             android:layout_marginLeft="4dp"
             android:text="⟳"
-            android:textSize="22sp"
+            android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="#F0F0F0" />
     </LinearLayout>
@@ -63,7 +63,7 @@
         android:id="@+id/match_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="4dp"
         android:divider="@null"
         android:scrollbars="vertical" />
 
@@ -72,7 +72,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:padding="16dp"
+        android:padding="12dp"
         android:textSize="11sp"
         android:textColor="#8A8E96" />
 </LinearLayout>

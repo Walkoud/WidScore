@@ -43,6 +43,7 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
             val shown = EspnApi.applySettings(dedup, s)
             val now = System.currentTimeMillis()
             Prefs.saveCache(ctx, shown, now)
+            Prefs.saveReport(ctx, now, EspnApi.lastReport, shown.size)
 
             val mgr = AppWidgetManager.getInstance(ctx)
             val emptySetup = s.leagues.isEmpty() && s.teams.isEmpty()
@@ -81,6 +82,27 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
 
     class RefreshReceiver : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent?) {
+            // Feedback immédiat : bouton ⟳ foncé, restore normal quand le worker finit.
+            try {
+                val s = Prefs.load(ctx)
+                val emptySetup = s.leagues.isEmpty() && s.teams.isEmpty()
+                val mgr = AppWidgetManager.getInstance(ctx)
+                for (comp in listOf(
+                    ComponentName(ctx, ScoreWidgetClassicProvider::class.java),
+                    ComponentName(ctx, ScoreWidgetDarkProvider::class.java)
+                )) {
+                    val dark = comp.className.contains("Dark")
+                    for (id in mgr.getAppWidgetIds(comp)) {
+                        val views = WidgetRenderer.buildHeader(ctx, dark, 0, 0L, emptySetup, pressed = true)
+                        val adapter = Intent(ctx, MatchListService::class.java).apply {
+                            putExtra(MatchListService.EXTRA_DARK, dark)
+                            data = Uri.parse("widscore://widget/$id-${if (dark) "dark" else "classic"}")
+                        }
+                        views.setRemoteAdapter(R.id.match_list, adapter)
+                        try { mgr.updateAppWidget(id, views) } catch (_: Exception) {}
+                    }
+                }
+            } catch (_: Exception) {}
             enqueueOneShot(ctx)
         }
     }

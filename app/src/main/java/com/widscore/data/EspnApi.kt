@@ -15,7 +15,12 @@ object EspnApi {
     private const val UA = "Mozilla/5.0 (Linux; Android 14) WidScore/1.0"
     private var lastCall = 0L
 
-    private suspend fun get(url: String): String? = withContext(Dispatchers.IO) {
+    // Statut dernière synchro par ligue (affiché dans l'app : erreurs, rate limit 429).
+    data class LeagueStatus(val league: String, val ok: Boolean, val count: Int, val rateLimited: Boolean)
+    @Volatile var lastReport: List<LeagueStatus> = emptyList()
+    @Volatile var lastSyncAt: Long = 0L
+
+    private suspend fun getWithCode(url: String): Pair<String?, Int> = withContext(Dispatchers.IO) {
         synchronized(this@EspnApi) {
             val wait = 150L - (System.currentTimeMillis() - lastCall)
             if (wait > 0) Thread.sleep(wait)
@@ -27,11 +32,13 @@ object EspnApi {
                 connectTimeout = 20000; readTimeout = 20000
                 setRequestProperty("User-Agent", UA)
             }
-            if (conn.responseCode == 404) return@withContext null
-            if (conn.responseCode !in 200..299) return@withContext null
-            conn.inputStream.bufferedReader().readText()
-        } catch (_: Exception) { null } finally { conn?.disconnect() }
+            val code = conn.responseCode
+            if (code !in 200..299) return@withContext null to code
+            conn.inputStream.bufferedReader().readText() to code
+        } catch (_: Exception) { null to -1 } finally { conn?.disconnect() }
     }
+
+    private suspend fun get(url: String): String? = getWithCode(url).first
 
     // Accès brut pour RosterStore (ref-walk core.api, copie GetRawAsync).
     suspend fun getRaw(url: String): String? = get(url)
@@ -39,9 +46,24 @@ object EspnApi {
     suspend fun getMatches(leagueSlug: String): List<EspnMatch> {
         val slug = leagueSlug.trim()
         if (slug.isEmpty()) return emptyList()
-        val body = get("https://cdn.espn.com/core/soccer/scoreboard?league=${Uri.encode(slug)}&xhr=1")
-            ?: return emptyList()
-        return try { parseScoreboard(body, slug) } catch (_: Exception) { emptyList() }
+        val (body, code) = getWithCode("https://cdn.espn.com/core/soccer/scoreboard?league=${Uri.encode(slug)}&xhr=1")
+        if (body == null) {
+            recordStatus(slug, false, 0, code == 429)
+            return emptyList()
+        }
+        return try {
+            val list = parseScoreboard(body, slug)
+            recordStatus(slug, true, list.size, false)
+            list
+        } catch (_: Exception) {
+            recordStatus(slug, false, 0, false)
+            emptyList()
+        }
+    }
+
+    private fun recordStatus(league: String, ok: Boolean, count: Int, rate: Boolean) {
+        lastReport = (lastReport.filter { it.league != league } + LeagueStatus(league, ok, count, rate)).takeLast(40)
+        lastSyncAt = System.currentTimeMillis()
     }
 
     suspend fun getTeamSchedule(leagueSlug: String, teamId: String): List<EspnMatch> {

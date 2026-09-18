@@ -54,3 +54,19 @@ res/xml/*_info.xml (2x2, resize) / layout/widget_{classic,dark}.xml (ListView)
   drawable/widget_bg_*.xml header_*.xml match_card_dark.xml logo_box.xml
   values/strings.xml values-fr/strings.xml colors.xml themes.xml
 ```
+
+## v3 : bottom nav, fuzzy, sync status, perso
+- Bottom nav : Teams (search auto + favs équipes + reload) | Leagues (liste + favs ligues)
+  | Settings (sync + perso + langue).
+- Follow équipe n'abonne plus sa ligue (fetch implicite teamLeagues, affichage déjà
+  filtré aux favoris). Search fuzzy (accents/casse/ponctuation ignorés, mots).
+- Directory : statut "Loading world teams n/total" puis "N teams available", reste en
+  données (cache 30j) ; boutons reload teams / reload everything.
+- Sync status persisté (worker → prefs) : heure, nb matchs, ligues OK, échecs + rate
+  limit 429 explicite ("ESPN rate-limited, retry later").
+- Refresh widget : icône foncée au tap (receiver), restore normal fin worker.
+- Classic : blur `#80000000` arrondi 20dp, blasons avec lettres dessous.
+- Headers -30% (dark 26dp logo, refresh 28dp), dark cards 64dp compactes.
+- Clic match → Google 2 noms (défaut). Perso : scale 70–130%, compact, format dates,
+  couleur terminés (gris/blanc/accent), ligne ligue on/off, + réglages existants.
+

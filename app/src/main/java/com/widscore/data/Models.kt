@@ -84,7 +84,11 @@ data class FootballSettings(
     var showFinishedHeader: Boolean = true,
     var showFinishedDates: Boolean = true,
     var cardTheme: String = "classic",
-    var matchClickAction: String = "details", // details | google
+    var matchClickAction: String = "google", // details | google (défaut google : search noms équipes)
     var dateFormat: String = "daynumeric", // text | numeric | daynumeric
-    var lang: String = "en" // en | fr
+    var lang: String = "en", // en | fr
+    // Personnalisation widgets.
+    var widgetScale: Float = 1.0f, // 0.7 - 1.3 taille textes items
+    var compact: Boolean = false, // masque lignes ligue + sous-titres non-live
+    var showLeague: Boolean = true // ligne ligue dans item classic
 )

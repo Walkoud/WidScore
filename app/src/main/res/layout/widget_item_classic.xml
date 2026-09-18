@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Item Classic : statut + ligue, puis codes 3 lettres + crests + score (comme dark). -->
+<!-- Item Classic : statut + ligue, puis blasons avec lettres dessous + score. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/item_root"
     android:layout_width="match_parent"
@@ -7,7 +7,7 @@
     android:orientation="vertical"
     android:paddingLeft="6dp"
     android:paddingRight="6dp"
-    android:paddingBottom="10dp">
+    android:paddingBottom="8dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -39,46 +39,56 @@
         android:gravity="center_vertical"
         android:layout_marginTop="2dp">
 
-        <TextView
-            android:id="@+id/home_code"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:gravity="right"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:textColor="#F0F0F0" />
+            android:orientation="vertical"
+            android:gravity="center">
 
-        <ImageView
-            android:id="@+id/home_crest"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:layout_marginLeft="4dp" />
+            <ImageView
+                android:id="@+id/home_crest"
+                android:layout_width="22dp"
+                android:layout_height="22dp" />
+
+            <TextView
+                android:id="@+id/home_code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="#F0F0F0" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/score"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginLeft="8dp"
-            android:layout_marginRight="8dp"
+            android:layout_marginLeft="6dp"
+            android:layout_marginRight="6dp"
             android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="#F0F0F0" />
 
-        <ImageView
-            android:id="@+id/away_crest"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:layout_marginRight="4dp" />
-
-        <TextView
-            android:id="@+id/away_code"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:gravity="left"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:textColor="#F0F0F0" />
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <ImageView
+                android:id="@+id/away_crest"
+                android:layout_width="22dp"
+                android:layout_height="22dp" />
+
+            <TextView
+                android:id="@+id/away_code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="#F0F0F0" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

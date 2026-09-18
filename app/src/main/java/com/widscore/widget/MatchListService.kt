@@ -68,6 +68,7 @@ class MatchListService : RemoteViewsService() {
                         val lctx = Lang.localizedContext(ctx)
                         val item = if (dark) WidgetRenderer.buildDarkItem(ctx, m, settings)
                         else WidgetRenderer.buildClassicItem(ctx, m, settings, lctx)
+                        WidgetRenderer.applyItemScale(item, m, settings, dark)
                         // Clic item -> template (MainActivity MATCH) complété par fill-in.
                         val fill = Intent().apply {
                             putExtra(EXTRA_LEAGUE, m.leagueSlug)

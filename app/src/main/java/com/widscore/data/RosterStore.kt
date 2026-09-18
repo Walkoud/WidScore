@@ -79,6 +79,11 @@ object RosterStore {
         return out
     }
 
+    fun clearCache(ctx: Context) {
+        try { file(ctx).delete() } catch (_: Exception) {}
+        done = 0; total = 0
+    }
+
     // Warm : ligues abonnées d'abord, puis le reste des curated. Copie EnsureWorldRostersAsync.
     suspend fun warm(
         ctx: Context,
@@ -194,22 +199,30 @@ object RosterStore {
         return if (url.startsWith("http://", ignoreCase = true)) "https://" + url.substring(7) else url
     }
 
-    // Recherche : minuscules + accents stripés + alias FR (copie FootballTeamSearchWindow).
+    // Recherche tolérante : accents/casse/espaces/ponctuation ignorés,
+    // chaque mot de la requête doit apparaître (contenu) dans le nom.
     fun search(teams: List<RosterTeam>, query: String): List<RosterTeam> {
         val q = norm(query)
         if (q.isBlank()) return teams.sortedBy { it.name }.take(60)
-        return teams.filter {
-            norm(it.name).contains(q) || it.abbr.lowercase().contains(q) || matchesAlias(it.name, q)
+        val words = q.split(" ").filter { it.length > 1 }
+        return teams.filter { t ->
+            val n = norm(t.name)
+            val flat = n.replace(" ", "")
+            val qflat = q.replace(" ", "")
+            flat.contains(qflat) || t.abbr.lowercase() == qflat ||
+                (words.isNotEmpty() && words.all { w -> n.contains(w) }) ||
+                matchesAlias(t.name, q)
         }.sortedBy { it.name }.take(60)
     }
 
+    // "Türkiye" -> "turkiye", "St. Pauli" -> "st pauli".
     fun norm(s: String?): String {
         if (s.isNullOrBlank()) return ""
-        val lower = s.trim().lowercase().let {
-            Normalizer.normalize(it, Normalizer.Form.NFD)
-        }
-        return Normalizer.normalize(lower, Normalizer.Form.NFC)
-            .filter { it.category != CharCategory.NON_SPACING_MARK }
+        val decomposed = Normalizer.normalize(s.trim().lowercase(), Normalizer.Form.NFD)
+        val stripped = decomposed.filter { it.category != CharCategory.NON_SPACING_MARK }
+        return Normalizer.normalize(stripped, Normalizer.Form.NFC)
+            .map { if (it.isLetterOrDigit()) it else ' ' }
+            .joinToString("").split(" ").filter { it.isNotEmpty() }.joinToString(" ")
     }
 
     private val frAliases = mapOf(
