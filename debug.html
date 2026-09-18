@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WidScore — Debug pipeline widgets</title>
+<style>
+  :root { --bg:#0d0e11; --card:#18191c; --card2:#1e1e1e; --accent:#7dd3fc; --live:#ff5f56; --dim:#8a8e96; --hdr:#9f9fff; }
+  * { box-sizing:border-box; }
+  body { background:var(--bg); color:#f0f0f0; font-family:system-ui,sans-serif; margin:0; padding:12px; }
+  h2 { font-size:15px; color:var(--accent); margin:18px 0 8px; }
+  .card { background:var(--card); border-radius:12px; padding:12px; margin-bottom:10px; }
+  label { font-size:12px; color:var(--dim); display:block; margin-top:8px; }
+  input, select, button { font-size:14px; padding:8px; border-radius:8px; border:1px solid #333; background:#222; color:#eee; }
+  input { width:100%; }
+  button { background:#3b82f6; border:none; font-weight:bold; cursor:pointer; margin-top:10px; width:100%; }
+  button.ghost { background:#333; }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+  #log { background:#000; border-radius:8px; padding:8px; font-family:monospace; font-size:11px; max-height:220px; overflow-y:auto; white-space:pre-wrap; }
+  table { width:100%; border-collapse:collapse; font-size:11px; }
+  th, td { border-bottom:1px solid #2a2b2e; padding:4px; text-align:left; vertical-align:top; }
+  th { color:var(--dim); }
+  .drop { color:#ff9; } .src { color:var(--accent); font-size:10px; }
+  details { margin-bottom:8px; } summary { cursor:pointer; font-weight:bold; font-size:13px; padding:6px; background:#222; border-radius:8px; }
+  /* Preview widget dark */
+  .wroot { background:#121212; border-radius:20px; padding:6px; max-width:420px; margin:0 auto; }
+  .whead { background:var(--hdr); border-radius:16px 16px 0 0; padding:6px 8px; display:flex; align-items:center; gap:8px; }
+  .wlogo { background:#212121; border-radius:10px; width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-size:14px; }
+  .wtime { flex:1; text-align:center; color:#fff; font-size:10px; }
+  .wlive { color:#b71c1c; font-size:8px; font-weight:bold; text-align:center; }
+  .wref { color:#212121; font-size:16px; font-weight:bold; }
+  .wdate { text-align:center; color:#e0e0e0; font-size:12px; padding:2px 0 4px; }
+  .mcard { background:var(--card2); border-radius:12px; min-height:64px; margin:0 4px 4px; padding:6px; display:flex; align-items:center; }
+  .mcol { flex:1; text-align:center; }
+  .mcol img { width:20px; height:20px; object-fit:contain; }
+  .mcode { font-size:11px; font-weight:bold; }
+  .mmain { font-size:14px; font-weight:bold; } .msub { font-size:8px; font-weight:bold; color:var(--live); }
+  .crow { padding:4px 6px 6px; border-bottom:1px solid #222; font-size:12px; }
+  .cstat { font-size:10px; font-weight:bold; color:var(--dim); } .clg { font-size:9px; color:#666; float:right; }
+  .cscore { font-weight:bold; }
+  img.crest { width:18px; height:18px; object-fit:contain; vertical-align:middle; }
+  #bar { height:8px; background:#222; border-radius:4px; overflow:hidden; margin-top:8px; display:none; }
+  #barfill { height:100%; width:0; background:var(--accent); }
+</style>
+</head>
+<body>
+<h2>⚽ WidScore — Debug pipeline (réplique Android 1.2.9)</h2>
+
+<div class="card">
+  <label>Équipes suivies (format: nom|idESPN|ligue — une par ligne)</label>
+  <input id="favs" style="height:64px" value="Besiktas|1895|tur.1&#10;Barcelona|83|esp.1">
+  <label>Ligues abonnées (séparées par virgule, vide = aucune)</label>
+  <input id="leagues" value="">
+  <div class="row">
+    <div><label>Matchs max</label><input id="maxm" type="number" value="30"></div>
+    <div><label>Rétention terminés (h)</label><input id="finH" type="number" value="24"></div>
+    <div><label>Clé football-data.org (optionnel)</label><input id="fdkey" placeholder="X-Auth-Token"></div>
+    <div><label>Clé bzzoiro (optionnel)</label><input id="bzkey" placeholder="Token"></div>
+  </div>
+  <button id="run">▶ Lancer le pipeline</button>
+  <div id="bar"><div id="barfill"></div></div>
+</div>
+
+<div class="card"><h2>Console</h2><div id="log"></div></div>
+<div class="card"><h2>1) Brut par source</h2><div id="raw"></div></div>
+<div class="card"><h2>2) Décisions dedup</h2><div id="dec"></div></div>
+<div class="card"><h2>3) Preview widget Dark</h2><div class="wroot"><div class="whead"><div class="wlogo">⚽</div><div style="flex:1"><div class="wlive" id="pLive"></div><div class="wtime" id="pTime"></div></div><div class="wref">⟳</div></div><div id="pDark"></div></div></div>
+<div class="card"><h2>4) Preview widget Classic</h2><div class="wroot" style="background:rgba(0,0,0,.5)"><div id="pClassic"></div></div></div>
+<div class="card"><button id="copy">📋 Copier le rapport (à coller à l\'IA)</button></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const LOGS = [];
+function log(tag, msg) {
+  const t = new Date().toTimeString().slice(0,8);
+  LOGS.push(`[${t}] [${tag}] ${msg}`);
+  $('log').textContent = LOGS.slice(-300).join('\n');
+  $('log').scrollTop = 1e6;
+}
+function prog(p) { $('bar').style.display='block'; $('barfill').style.width = Math.round(p*100)+'%'; }
+const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/[^a-z0-9 ]/g,' ').split(' ').filter(Boolean).join(' ');
+const triCode = (name, abbr) => {
+  if (abbr && abbr.length === 3) return abbr.toUpperCase();
+  const n = (name||'').trim();
+  if (n.length <= 3) return n.toUpperCase();
+  return (n.replace(/[^a-zA-Z0-9]/g,'').slice(0,3).toUpperCase() || '?');
+};
+const dayKey = ms => { if(!ms) return '?'; const d = new Date(ms); return d.getUTCFullYear()+'-'+d.getUTCDay2(); };
+Date.prototype.getUTCDay2 = function(){ return Math.floor(Date.UTC(this.getUTCFullYear(),this.getUTCMonth(),this.getUTCDate())/864e5); };
+function sameSide(a, b) {
+  if (a.id && b.id) return a.id === b.id;
+  const na = norm(a.name), nb = norm(b.name);
+  if (na.length < 4 || nb.length < 4) return na === nb;
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+function sameScore(a, b) {
+  if (a.state==='in' || b.state==='in') return true;
+  if (a.state==='post' && b.state==='post') return a.hs===b.hs && a.as===b.as;
+  return a.state!=='post' && b.state!=='post';
+}
+const CURATED = ['eng.1','eng.2','esp.1','esp.2','ita.1','ita.2','ger.1','ger.2','fra.1','ned.1','por.1','tur.1','usa.1','mex.1','bra.1','arg.1','chn.1','jpn.1','aus.1','uefa.champions','uefa.europa','uefa.europa.conf','uefa.nations','fifa.world','conmebol.america','fifa.friendly','uefa.euro','fifa.cwc','eng.fa','eng.charity','esp.copa_del_rey','esp.super_cup','ita.coppa_italia','ita.super_cup','ger.super_cup','fra.super_cup','uefa.super_cup','ned.supercup','sco.1','bel.1','ned.1','club.friendly','esp.joan_gamper','fifa.cwc'];
+const FDCODE = {'eng.1':'PL','eng.2':'ELC','esp.1':'PD','ita.1':'SA','ger.1':'BL1','fra.1':'FL1','ned.1':'DED','por.1':'PPL','bra.1':'BSA','uefa.champions':'CL','uefa.euro':'EC','fifa.world':'WC'};
+const BZMAP = {1:'eng.1',12:'eng.2',39:'eng.fa',3:'esp.1',38:'esp.2',41:'esp.copa_del_rey',4:'ita.1',42:'ita.coppa_italia',5:'ger.1',94:'ger.2',6:'fra.1',44:'fra.coupe_de_france',10:'ned.1',2:'por.1',7:'uefa.champions',8:'uefa.europa',83:'uefa.europa.conf',90:'uefa.super_cup',64:'uefa.nations',66:'uefa.euro',11:'tur.1',9:'bra.1',27:'fifa.world',79:'fifa.friendly',31:'fifa.friendly',13:'sco.1',49:'jpn.1',18:'usa.1'};
+
+async function jget(url, headers={}) {
+  const r = await fetch(url, {headers});
+  if (!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+function parseScoreboard(body, slug, source) {
+  const out = [];
+  const root = (body.content && body.content.sbData) || body;
+  for (const e of (root.events || [])) {
+    const c = (e.competitions||[])[0]; if (!c) continue;
+    out.push(parseComp(e.id, c, slug, c.date, source));
+  }
+  return out.filter(Boolean);
+}
+function parseComp(id, c, slug, dateStr, source) {
+  try {
+    const comps = c.competitors || [];
+    const H = comps.find(x=>x.homeAway==='home') || comps[0];
+    const A = comps.find(x=>x.homeAway==='away') || comps[1];
+    if (!H || !A) return null;
+    const T = x => { const t = x.team||x; return {id:String(t.id||''), name:t.displayName||t.name||'', abbr:(t.abbreviation||'').toUpperCase(), logo:t.logo||''}; };
+    const S = x => { const v = x.score; if (v==null) return null;
+      if (typeof v==='object') { const d=(v.displayValue||'').trim(); const n=parseInt(d); return isNaN(n)?null:n; }
+      const n=parseInt(String(v).trim()); return isNaN(n)?null:n; };
+    const st = (((c.status||{}).type||{}).state||'').toLowerCase();
+    return { id:String(id||Math.random()), leagueSlug:slug, utc:Date.parse(dateStr)||0, state:st,
+      clock:(c.status||{}).displayClock||'', home:T(H), away:T(A), hs:S(H), as:S(A), source };
+  } catch(e){ return null; }
+}
+function splitName(name) {
+  let i = name.search(/ at /i);
+  if (i>0) return {home:name.slice(i+4).trim(), away:name.slice(0,i).trim()};
+  i = name.search(/ vs\.? /i);
+  if (i>0) return {home:name.slice(0,i).trim(), away:name.slice(i+4).trim()};
+  return null;
+}
+function seasonYear() { const d=new Date(); return d.getMonth()>=6?d.getFullYear():d.getFullYear()-1; }
+
+let ALL = [];   // {m, source}
+let DROPPED = []; // {m, reason}
+
+async function run() {
+  ALL = []; DROPPED = []; $('raw').innerHTML=''; $('dec').innerHTML=''; $('pDark').innerHTML=''; $('pClassic').innerHTML='';
+  const favs = $('favs').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ const [n,id,lg]=l.split('|'); return {name:n.trim(), id:(id||'').trim(), league:(lg||'').trim().toLowerCase()}; });
+  const subs = $('leagues').value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  const maxM = Math.max(1, parseInt($('maxm').value)||30);
+  const finH = Math.max(0, parseInt($('finH').value)||0);
+  const fdKey = $('fdkey').value.trim(), bzKey = $('bzkey').value.trim();
+  log('CFG', `favs=${favs.map(f=>f.name).join(',')} subs=${subs.join(',')||'-'} max=${maxM} finH=${finH}`);
+  prog(0.02);
+
+  // 0) discovery ligues par équipe (team-events limit=1)
+  const teamLeagues = {};
+  for (const f of favs) {
+    const found = f.league?[f.league]:[];
+    const todo = [...new Set([...(f.league?[f.league]:[]), ...CURATED])];
+    let n=0;
+    for (const lg of todo) {
+      try {
+        const u = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${lg}/seasons/${seasonYear()}/teams/${f.id}/events?lang=en&region=us&limit=1`;
+        const j = await jget(u);
+        if (j.items && j.items.length) found.push(lg);
+      } catch(e){}
+      if (++n % 12 === 0) prog(0.02 + 0.1*n/todo.length/favs.length);
+    }
+    teamLeagues[f.id] = [...new Set(found)];
+    log('DISC', `${f.name} -> ${teamLeagues[f.id].join(',')}`);
+  }
+  const fetch = [...new Set([...subs, ...Object.values(teamLeagues).flat()])];
+  log('FETCH', fetch.join(','));
+
+  const push = (list, source) => { for (const m of list) ALL.push({m, source}); };
+  let i=0;
+  // 1) scoreboards
+  for (const lg of fetch) {
+    try {
+      const j = await jget(`https://cdn.espn.com/core/soccer/scoreboard?league=${encodeURIComponent(lg)}&xhr=1`);
+      const list = parseScoreboard(j, lg, 'scoreboard:'+lg);
+      push(list, 'scoreboard:'+lg); log('ESPN', `${lg} +${list.length}`);
+    } catch(e){ log('ESPN', `${lg} FAIL ${e.message}`); }
+    prog(0.15+0.2*(++i/fetch.length));
+  }
+  // 2) schedules (+ sweep fallback)
+  for (const f of favs) {
+    for (const lg of (teamLeagues[f.id]||[])) {
+      let got = null;
+      for (const base of ['https://site.web.api.espn.com/apis/site/v2/sports/soccer','https://site.api.espn.com/apis/site/v2/sports/soccer']) {
+        try {
+          const j = await jget(`${base}/${lg}/teams/${f.id}/schedule`);
+          const arr = (j.events||[]).map(e=>parseComp(e.id,(e.competitions||[])[0],lg,e.date||((e.competitions||[])[0]||{}).date,'schedule:'+lg)).filter(Boolean);
+          got = arr; break;
+        } catch(e){}
+      }
+      if (!got) { // sweep 6j
+        got = [];
+        const now = new Date();
+        for (let d=1; d<=6; d++) {
+          const dt = new Date(now.getTime()-d*864e5);
+          const ds = `${dt.getUTCFullYear()}${String(dt.getUTCMonth()+1).padStart(2,'0')}${String(dt.getUTCDate()).padStart(2,'0')}`;
+          try {
+            const j = await jget(`https://cdn.espn.com/core/soccer/scoreboard?league=${encodeURIComponent(lg)}&dates=${ds}&xhr=1`);
+            got.push(...parseScoreboard(j, lg, 'sweep:'+lg).filter(m=>m.home.id===f.id||m.away.id===f.id));
+          } catch(e){}
+        }
+      }
+      push(got, 'schedule:'+lg); log('SCHED', `${f.name}/${lg} +${got.length}`);
+    }
+    prog(0.4);
+  }
+  // 3) fixtures saison
+  for (const f of favs) {
+    for (const lg of (teamLeagues[f.id]||[])) {
+      try {
+        const j = await jget(`https://sports.core.api.espn.com/v2/sports/soccer/leagues/${lg}/seasons/${seasonYear()}/teams/${f.id}/events?lang=en&region=us&limit=100`);
+        const now = Date.now(); let add=0;
+        for (const it of (j.items||[])) {
+          try {
+            const e = await jget(it.$ref.replace(/^http:/,'https:'));
+            const utc = Date.parse(e.date);
+            if (!(utc > now-6*36e5)) continue;
+            const sp = splitName(e.name||''); if(!sp) continue;
+            const tn = norm(f.name);
+            const homeIs = norm(sp.home).includes(tn)||tn.includes(norm(sp.home));
+            ALL.push({m:{id:String(e.id), leagueSlug:lg, utc, state:'pre', clock:'',
+              home:{id:homeIs?f.id:'', name:sp.home, abbr:triCode(sp.home,''), logo:''},
+              away:{id:!homeIs?f.id:'', name:sp.away, abbr:triCode(sp.away,''), logo:''},
+              hs:null, as:null}, source:'fixtures:'+lg}); add++;
+          } catch(e){}
+        }
+        log('FIX', `${f.name}/${lg} +${add}`);
+      } catch(e){ log('FIX', `${f.name}/${lg} FAIL`); }
+    }
+    prog(0.6);
+  }
+  // 4) football-data.org optionnel
+  if (fdKey) {
+    const codes = [...new Set(fetch.map(l=>FDCODE[l]).filter(Boolean))];
+    for (const code of codes) {
+      await new Promise(r=>setTimeout(r,6100));
+      try {
+        const j = await jget(`https://api.football-data.org/v4/competitions/${code}/matches`, {'X-Auth-Token':fdKey});
+        let add=0;
+        for (const o of (j.matches||[])) {
+          const st = o.status;
+          const state = (st==='IN_PLAY'||st==='PAUSED')?'in':(st==='FINISHED'||st==='AWARDED')?'post':'pre';
+          const utc = Date.parse(o.utcDate); if(!utc) continue;
+          const H=o.homeTeam, A=o.awayTeam;
+          const m = {id:'fd-'+o.id, leagueSlug:Object.keys(FDCODE).find(k=>FDCODE[k]===code), utc, state, clock:'',
+            home:{id:'fd-'+H.id, name:H.name, abbr:(H.tla||'').toUpperCase(), logo:H.crest||''},
+            away:{id:'fd-'+A.id, name:A.name, abbr:(A.tla||'').toUpperCase(), logo:A.crest||''},
+            hs:o.score?.fullTime?.home??null, as:o.score?.fullTime?.away??null};
+          linkFav(m, favs); ALL.push({m, source:'fd:'+code}); add++;
+        }
+        log('FD', `${code} +${add}`);
+      } catch(e){ log('FD', `${code} FAIL ${e.message}`); }
+    }
+  }
+  // 5) bzzoiro optionnel
+  if (bzKey) {
+    const H = {'Authorization':'Token '+bzKey};
+    const bznorm = s => norm(s).split(' ').filter(w=>!['fc','cf','sc','jk','fk','sk','as','spor','club','real'].includes(w)).join(' ');
+    // resolve
+    const bzIds = {};
+    for (const f of favs) {
+      const fn = bznorm(f.name);
+      let foundId = null;
+      for (const [bid] of Object.entries(BZMAP)) {
+        try {
+          const t = await jget(`https://sports.bzzoiro.com/api/v2/teams/?league_id=${bid}&limit=200`, H);
+          const hit = (t.results||[]).find(x=>{ const n=bznorm(x.name); return n&&fn&&(n===fn||n.includes(fn)||fn.includes(n)); });
+          if (hit) { foundId = hit.id; break; }
+        } catch(e){}
+      }
+      if (foundId) { bzIds[f.id]=foundId; log('BZ', `${f.name} -> team ${foundId}`); }
+      else log('BZ', `${f.name} team not found`);
+    }
+    const fmt = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+    const now = new Date(); const from = fmt(new Date(now-4*864e5)), to = fmt(new Date(now+35*864e5));
+    for (const f of favs) {
+      const tid = bzIds[f.id]; if(!tid) continue;
+      try {
+        const j = await jget(`https://sports.bzzoiro.com/api/v2/events/?team_id=${tid}&date_from=${from}&date_to=${to}&limit=200`, H);
+        let add=0;
+        for (const ev of (j.results||[])) {
+          const st = String(ev.status||'').toLowerCase();
+          if (st.includes('cancel')) continue;
+          const state = (/live|progress|half|1st|2nd/.test(st))?'in':(st==='finished'?'post':'pre');
+          const utc = Date.parse(ev.event_date); if(!utc) continue;
+          const lid = ev.league_id||0;
+          const m = {id:'bz-'+ev.id, leagueSlug:BZMAP[lid]||('bz-'+lid), utc, state, clock:String(ev.current_minute??''),
+            home:{id:'', name:ev.home_team, abbr:triCode(ev.home_team,''), logo:''},
+            away:{id:'', name:ev.away_team, abbr:triCode(ev.away_team,''), logo:''},
+            hs:ev.home_score??null, as:ev.away_score??null};
+          linkFav(m, favs); ALL.push({m, source:'bz:'+f.name}); add++;
+        }
+        log('BZ', `${f.name} +${add}`);
+      } catch(e){ log('BZ', `${f.name} FAIL ${e.message}`); }
+    }
+  }
+  prog(0.8);
+
+  function linkFav(m, favs) {
+    for (const s of [m.home, m.away]) {
+      const n = norm(s.name);
+      for (const f of favs) {
+        const fn = norm(f.name);
+        if (fn && (n===fn||n.includes(fn)||fn.includes(n))) { s.id=f.id; s.name=f.name; }
+      }
+    }
+  }
+
+  // ---- DEDUP (copie exacte 1.2.9) ----
+  const kept = [];
+  const dayK = ms => { if(!ms) return '?'; const d=new Date(ms); return d.getUTCFullYear()+'-'+Math.floor(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())/864e5); };
+  const sameSide = (a,b) => {
+    if (a.id && b.id) return a.id===b.id;
+    const na=norm(a.name), nb=norm(b.name);
+    if (na.length<4||nb.length<4) return na===nb;
+    return na===nb||na.includes(nb)||nb.includes(na);
+  };
+  const sameScore = (a,b) => {
+    if (a.state==='in'||b.state==='in') return true;
+    if (a.state==='post'&&b.state==='post') return a.hs===b.hs&&a.as===b.as;
+    return a.state!=='post'&&b.state!=='post';
+  };
+  for (const {m, source} of ALL) {
+    const day = dayK(m.utc);
+    const hit = kept.find(k => dayK(k.m.utc)===day && sameSide(k.m.home,m.home) && sameSide(k.m.away,m.away) &&
+      (k.m.leagueSlug.toLowerCase()===m.leagueSlug.toLowerCase() || sameScore(k.m,m)));
+    if (hit) DROPPED.push({m, source, reason:`doublon de #${kept.indexOf(hit)+1} (${hit.source})`});
+    else kept.push({m, source});
+  }
+  log('DEDUP', `${ALL.length} -> ${kept.length} (drop ${DROPPED.length})`);
+
+  // ---- APPLY SETTINGS ----
+  const favIds = new Set(favs.map(f=>f.id));
+  let list = kept.map(k=>k.m);
+  if (favIds.size) list = list.filter(m=>favIds.has(m.home.id)||favIds.has(m.away.id));
+  const nowMs = Date.now();
+  if (finH<=0) list = list.filter(m=>m.state!=='post');
+  else list = list.filter(m=>m.state!=='post'||(nowMs-(m.utc+115*6e4))<=finH*36e5);
+  list.sort((a,b)=>((b.state==='in')-(a.state==='in'))||((a.state==='post')-(b.state==='post'))||(a.utc-b.utc));
+  const shown = list.slice(0, maxM);
+  log('SHOWN', `${shown.length} (live ${shown.filter(m=>m.state==='in').length})`);
+
+  renderRaw(); renderDec(shown); renderPreview(shown);
+  prog(1);
+  log('DONE', 'rapport prêt — bouton Copier en bas');
+}
+
+function fmtDate(ms) { const d=new Date(ms); return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function renderRaw() {
+  const by = {};
+  for (const {m, source} of ALL) { (by[source] = by[source]||[]).push(m); }
+  $('raw').innerHTML = Object.entries(by).map(([s, arr]) =>
+    `<details><summary><span class="src">${esc(s)}</span> — ${arr.length}</summary>
+    <table><tr><th>date</th><th>match</th><th>score</th><th>état</th><th>id</th><th>ligue</th></tr>` +
+    arr.map(m=>`<tr><td>${fmtDate(m.utc)}</td><td>${esc(m.home.name)} vs ${esc(m.away.name)}</td><td>${m.hs??''}${m.hs!=null?' - '+m.as:''}</td><td>${m.state}</td><td>${esc(m.id)}</td><td>${esc(m.leagueSlug)}</td></tr>`).join('') +
+    `</table></details>`).join('');
+}
+
+function renderDec(shown) {
+  const ids = new Set(shown.map(m=>m.id+'|'+m.leagueSlug));
+  $('dec').innerHTML = `<table><tr><th>#</th><th>match</th><th>date</th><th>source</th><th>verdict</th></tr>` +
+    ALL.map(({m, source}, i) => {
+      const ok = ids.has(m.id+'|'+m.leagueSlug);
+      const dr = DROPPED.find(d=>d.m===m);
+      return `<tr><td>${i+1}</td><td>${esc(m.home.name)} vs ${esc(m.away.name)}${m.hs!=null?` <b>${m.hs}-${m.as}</b>`:''}</td><td>${fmtDate(m.utc)}</td><td class="src">${esc(source)}</td><td class="${dr||!ok?'drop':''}">${dr?('DROP — '+esc(dr.reason)):(ok?'GARDÉ':'filtré (favoris/rétention/max)')}</td></tr>`;
+    }).join('') + `</table>`;
+}
+
+function renderPreview(shown) {
+  const live = shown.filter(m=>m.state==='in').length;
+  $('pTime').textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  $('pLive').textContent = live?`● ${live} LIVE`:'';
+  let lastDay = '';
+  $('pDark').innerHTML = shown.map(m => {
+    const dk = dayK(m.utc);
+    const head = dk!==lastDay ? `<div class="wdate">${new Date(m.utc).toLocaleDateString(undefined,{weekday:'short',day:'2-digit',month:'2-digit'})}</div>` : '';
+    lastDay = dk;
+    const main = (m.state!=='pre'&&m.hs!=null)?`${m.hs} - ${m.as}`:new Date(m.utc).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const sub = m.state==='in'?'● '+(m.clock||'LIVE'):(m.state==='post'?'FT':'');
+    const cr = (t)=> t.logo?`<img src="${t.logo}" onerror="this.remove()">`:'';
+    return head+`<div class="mcard"><div class="mcol">${cr(m.home)}<div class="mcode">${triCode(m.home.name,m.home.abbr)}</div></div><div><div class="mmain" style="${m.state==='in'?'color:var(--live)':''}">${main}</div><div class="msub">${sub}</div></div><div class="mcol">${cr(m.away)}<div class="mcode">${triCode(m.away.name,m.away.abbr)}</div></div></div>`;
+  }).join('') || '<div class="wdate">Aucun match</div>';
+  $('pClassic').innerHTML = shown.map(m => {
+    const st = m.state==='in'?'● '+(m.clock||'LIVE'):(m.state==='post'?'FT':fmtDate(m.utc));
+    const sc = (m.hs!=null)?`${m.hs} - ${m.as}`:'vs';
+    return `<div class="crow"><span class="cstat">${st}</span><span class="clg">☆ ${esc(m.leagueSlug)}</span><br>${m.home.logo?`<img class="crest" src="${m.home.logo}" onerror="this.remove()">`:''} <b>${triCode(m.home.name,m.home.abbr)}</b> <span class="cscore">${sc}</span> <b>${triCode(m.away.name,m.away.abbr)}</b> ${m.away.logo?`<img class="crest" src="${m.away.logo}" onerror="this.remove()">`:''}</div>`;
+  }).join('');
+}
+
+$('run').onclick = () => { $('barfill').style.width='0'; run().catch(e=>log('FATAL', e.message)); };
+$('copy').onclick = async () => {
+  const txt = `WIDSCORE DEBUG\nfavs=${$('favs').value.replace(/\n/g,';')}\n` + LOGS.join('\n') +
+    `\nDROPPED:\n` + DROPPED.map(d=>`- ${d.m.home.name} vs ${d.m.away.name} ${d.m.utc} [${d.source}] :: ${d.reason}`).join('\n');
+  try { await navigator.clipboard.writeText(txt); log('UI','rapport copié'); }
+  catch(e){ log('UI','copie impossible: '+e.message); }
+};
+log('UI', 'prêt — configure favoris puis ▶');
+</script>
+</body>
+</html>
