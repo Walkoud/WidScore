@@ -36,10 +36,12 @@ abstract class BaseScoreProvider : AppWidgetProvider() {
             it.leagues.isEmpty() && it.teams.isEmpty()
         })
         views.setTextViewText(R.id.empty_view, lctx.getString(R.string.w_loading))
-        // Adapter distinct par widget (data Uri unique, sinon factory partagée).
+        // Adapter distinct par widget + nonce par update : force une factory
+        // neuve à chaque refresh (sinon certains launchers gardent des lignes
+        // obsolètes/dupliquées quand le dataset change).
         val adapter = Intent(ctx, MatchListService::class.java).apply {
             putExtra(MatchListService.EXTRA_DARK, dark)
-            data = Uri.parse("widscore://widget/$id-${if (dark) "dark" else "classic"}")
+            data = Uri.parse("widscore://widget/$id-${if (dark) "dark" else "classic"}-${System.currentTimeMillis()}")
         }
         views.setRemoteAdapter(R.id.match_list, adapter)
         // Template clic item -> MainActivity (fill-in depuis la factory).

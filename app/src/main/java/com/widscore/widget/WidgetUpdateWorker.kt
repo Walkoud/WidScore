@@ -200,7 +200,7 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                     val views = WidgetRenderer.buildHeader(ctx, dark, live, now, emptySetup)
                     val adapter = Intent(ctx, MatchListService::class.java).apply {
                         putExtra(MatchListService.EXTRA_DARK, dark)
-                        data = Uri.parse("widscore://widget/$id-${if (dark) "dark" else "classic"}")
+                        data = Uri.parse("widscore://widget/$id-${if (dark) "dark" else "classic"}-$now")
                     }
                     views.setRemoteAdapter(R.id.match_list, adapter)
                     val template = Intent(ctx, com.widscore.MainActivity::class.java)
@@ -304,7 +304,7 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                         val views = WidgetRenderer.buildHeader(ctx, dark, 0, 0L, emptySetup, pressed = true)
                         val adapter = Intent(ctx, MatchListService::class.java).apply {
                             putExtra(MatchListService.EXTRA_DARK, dark)
-                            data = Uri.parse("widscore://widget/$id-${if (dark) "dark" else "classic"}")
+                            data = Uri.parse("widscore://widget/$id-${if (dark) "dark" else "classic"}-pressed")
                         }
                         views.setRemoteAdapter(R.id.match_list, adapter)
                         try { mgr.updateAppWidget(id, views) } catch (_: Exception) {}
