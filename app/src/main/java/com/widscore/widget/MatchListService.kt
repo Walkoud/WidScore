@@ -36,11 +36,10 @@ class MatchListService : RemoteViewsService() {
         override fun onDestroy() {}
         override fun getCount() = rows.size
         override fun getViewTypeCount() = 2 // 0 = date header, 1 = match
-        // Types + ids stables : sans ça certains launchers dupliquent ou
-        // mélangent les lignes quand le dataset change entre 2 updates.
-        override fun getItemViewType(position: Int): Int {
-            return if (rows[position] is WidgetRenderer.Row.Date) 0 else 1
-        }
+        // Ids stables : sans ça certains launchers dupliquent ou mélangent
+        // les lignes quand le dataset change entre 2 updates.
+        // (RemoteViewsFactory n'a pas getItemViewType : les vues sont
+        // reconstruites à chaque getViewAt, pas recyclées.)
         override fun getItemId(p: Int): Long {
             return when (val r = rows[p]) {
                 is WidgetRenderer.Row.Date -> ("D" + r.text).hashCode().toLong()
