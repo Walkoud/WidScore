@@ -127,7 +127,43 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                     L.log("FD", "FAIL ${e.message}")
                 }
             }
-            // Dedup v3 cross-sources : ids hétérogènes (ESPN, "fd-", "bz-", vides)
+            // Backfill écussons : les sources sans logos (BZ, fixtures) récupèrent
+            // ceux d'ESPN via index nom normalisé exact (+ abbr exact).
+            try {
+                val logoByName = HashMap<String, String>()
+                val logoByAbbr = HashMap<String, String>()
+                fun putTeam(name: String, abbr: String, logo: String) {
+                    if (logo.isBlank()) return
+                    val n = com.widscore.data.RosterStore.norm(name)
+                    if (n.isNotBlank()) logoByName.putIfAbsent(n, logo)
+                    val a = abbr.trim().uppercase()
+                    if (a.length >= 2) logoByAbbr.putIfAbsent(a, logo)
+                }
+                for (t in com.widscore.data.RosterStore.loadCached(ctx)) {
+                    putTeam(t.name, t.abbr, t.logo)
+                }
+                for (m in all) {
+                    // Seules les entrées ESPN (ids natifs) alimentent l'index.
+                    if (m.id.startsWith("fd-") || m.id.startsWith("bz-")) continue
+                    putTeam(m.home.name, m.home.abbr, m.home.logo)
+                    putTeam(m.away.name, m.away.abbr, m.away.logo)
+                }
+                var filled = 0
+                for (m in all) {
+                    for (side in listOf(m.home, m.away)) {
+                        if (side.logo.isNotBlank()) continue
+                        val logo = logoByName[com.widscore.data.RosterStore.norm(side.name)]
+                            ?: logoByAbbr[side.abbr.trim().uppercase()].orEmpty()
+                        if (logo.isNotBlank()) {
+                            side.logo = logo
+                            filled++
+                        }
+                    }
+                }
+                L.log("LOGOS", "backfilled +$filled")
+            } catch (e: Exception) {
+                L.log("LOGOS", "FAIL ${e.message}")
+            }
             // + noms abrégés ("Amed SFK" vs "Amed Sportif Faaliyetler", tokens) +
             // dates en conflit inter-sources (10/10 vs 11/10).
             // Passe 1 : même jour + mêmes côtés + (même ligue OU même score).
