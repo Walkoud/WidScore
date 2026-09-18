@@ -27,7 +27,10 @@ object RosterStore {
     }
 
     private const val FILE = "football_rosters.json"
+    private const val LEAGUES_FILE = "football_leagues.json"
     private const val CACHE_DAYS = 30L
+    // Warm du reste du monde : borné par session (comme Palisades mais adapté mobile).
+    private const val REST_PER_RUN = 25
     @Volatile var done = 0
     @Volatile var total = 0
     @Volatile var running = false
@@ -84,7 +87,58 @@ object RosterStore {
         done = 0; total = 0
     }
 
-    // Warm : ligues abonnées d'abord, puis le reste des curated. Copie EnsureWorldRostersAsync.
+    // Liste complète des slugs ESPN (copie GetAllLeagueSlugsAsync Palisades),
+    // cache 30j. Sert le mapping équipe->ligues au-delà des curated.
+    suspend fun getAllSlugs(ctx: Context): List<String> = withContext(Dispatchers.IO) {
+        try {
+            val f = File(ctx.filesDir, LEAGUES_FILE)
+            if (f.exists()) {
+                val cached = JSONObject(f.readText())
+                val at = cached.optLong("fetchedAt", 0)
+                if (at > 0 && (System.currentTimeMillis() - at) < CACHE_DAYS * 24 * 3600_000L) {
+                    val arr = cached.optJSONArray("slugs") ?: JSONArray()
+                    val list = MutableList(arr.length()) { i -> arr.optString(i) }
+                        .filter { it.isNotBlank() }
+                    if (list.isNotEmpty()) return@withContext list
+                }
+            }
+        } catch (_: Exception) {}
+        val slugs = mutableListOf<String>()
+        try {
+            var next: String? =
+                "https://sports.core.api.espn.com/v2/sports/soccer/leagues?limit=200&lang=en&region=us"
+            var pages = 0
+            while (next != null && pages < 10) {
+                pages++
+                val body = EspnApi.getRaw(next) ?: break
+                val json = JSONObject(body)
+                val items = json.optJSONArray("items") ?: JSONArray()
+                for (i in 0 until items.length()) {
+                    val ref = items.optJSONObject(i)?.optString("\$ref") ?: ""
+                    val seg = ref.substringAfterLast("/").substringBefore("?")
+                    if (seg.isNotBlank()) slugs.add(seg)
+                }
+                next = null
+                if (json.optInt("pageCount", 1) > json.optInt("pageIndex", 1)) {
+                    next = "https://sports.core.api.espn.com/v2/sports/soccer/leagues" +
+                        "?limit=200&lang=en&region=us&page=" + (json.optInt("pageIndex", 1) + 1)
+                }
+            }
+        } catch (_: Exception) {}
+        val distinct = slugs.distinct()
+        if (distinct.isNotEmpty()) {
+            try {
+                File(ctx.filesDir, LEAGUES_FILE).writeText(
+                    JSONObject().put("fetchedAt", System.currentTimeMillis())
+                        .put("slugs", JSONArray(distinct)).toString()
+                )
+            } catch (_: Exception) {}
+        }
+        distinct
+    }
+
+    // Warm : abonnées d'abord, puis curated, puis reste du monde (borné/session).
+    // Copie EnsureWorldRostersAsync (priorités + enum complète).
     suspend fun warm(
         ctx: Context,
         leagues: List<String>,
@@ -94,18 +148,25 @@ object RosterStore {
         running = true
         try {
             val root = readDisk(ctx)
-            val missing = leagues.map { it.trim().lowercase() }
+            val prio = leagues.map { it.trim().lowercase() }
                 .filter { it.isNotBlank() }.distinct()
+            val curated = CuratedLeagues.all.map { it.slug.lowercase() }
+            val rest = try {
+                getAllSlugs(ctx).map { it.lowercase() }
+                    .filter { it.isNotBlank() && !prio.contains(it) && !curated.contains(it) }
+            } catch (_: Exception) { emptyList() }
+            val ordered = (prio + curated.filter { !prio.contains(it) } +
+                rest.filter { !prio.contains(it) && !curated.contains(it) }.take(REST_PER_RUN))
                 .filter { !isFresh(root, it) }
-            if (missing.isEmpty()) {
+            if (ordered.isEmpty()) {
                 total = 0; done = 0
                 onProgress(0, 0)
                 return@withContext
             }
-            total = missing.size; done = 0
+            total = ordered.size; done = 0
             onProgress(0, total)
             // Petits lots séquentiels (réseau mobile) : 4 ligues en parallèle.
-            for (chunk in missing.chunked(4)) {
+            for (chunk in ordered.chunked(4)) {
                 coroutineScope {
                     chunk.map { slug ->
                         async {

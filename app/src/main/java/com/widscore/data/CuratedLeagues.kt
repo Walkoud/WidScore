@@ -40,8 +40,15 @@ object CuratedLeagues {
         EspnLeague("uefa.euro", "Euro"),
         EspnLeague("fifa.cwc", "Club World Cup"),
         EspnLeague("eng.fa", "FA Cup"),
+        EspnLeague("eng.charity", "Community Shield"),
         EspnLeague("esp.copa_del_rey", "Copa del Rey"),
-        EspnLeague("ita.coppa_italia", "Coppa Italia")
+        EspnLeague("esp.super_cup", "Spanish Super Cup"),
+        EspnLeague("ita.coppa_italia", "Coppa Italia"),
+        EspnLeague("ita.super_cup", "Italian Super Cup"),
+        EspnLeague("ger.super_cup", "German Super Cup"),
+        EspnLeague("fra.super_cup", "French Super Cup"),
+        EspnLeague("uefa.super_cup", "UEFA Super Cup"),
+        EspnLeague("ned.supercup", "Dutch Super Cup")
     )
     fun nameOf(slug: String) = all.firstOrNull {
         it.slug.equals(slug, ignoreCase = true)
