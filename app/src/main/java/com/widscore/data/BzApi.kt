@@ -179,7 +179,7 @@ object BzApi {
 
     // Events d'une équipe sur fenêtre [jours passés, jours à venir].
     suspend fun getTeamEvents(
-        key: String, teamId: Int, daysBack: Int = 4, daysAhead: Int = 35
+        key: String, teamId: Int, teamName: String, daysBack: Int = 4, daysAhead: Int = 35
     ): List<JSONObject>? {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
@@ -196,7 +196,7 @@ object BzApi {
                     "/events/?team_id=$teamId&date_from=$from&date_to=$to&limit=200&offset=$offset", key
                 )
                 if (body == null) {
-                    LogStore.log("BZ", "team $teamId FAIL http=$code")
+                    LogStore.log("BZ", "$teamName team $teamId FAIL http=$code")
                     return null
                 }
                 val arr = JSONObject(body).optJSONArray("results") ?: break
@@ -205,7 +205,7 @@ object BzApi {
                 offset += 200
             }
         } catch (e: Exception) {
-            LogStore.log("BZ", "team $teamId FAIL ${e.message}")
+            LogStore.log("BZ", "$teamName team $teamId FAIL ${e.message}")
             return null
         }
         return out
@@ -264,7 +264,10 @@ object BzApi {
 
     fun normName(s: String): String {
         val stop = setOf("fc", "cf", "sc", "jk", "fk", "sk", "as", "ac", "ssc", "spor", "club", "de", "la", "le", "les", "real")
-        return s.lowercase()
+        // Strip accents : "Beşiktaş JK" -> "besiktas" (sinon jamais matché).
+        val decomposed = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
+        val stripped = decomposed.filter { it.category != CharCategory.NON_SPACING_MARK }
+        return java.text.Normalizer.normalize(stripped, java.text.Normalizer.Form.NFC)
             .map { if (it.isLetterOrDigit() || it == ' ') it else ' ' }.joinToString("")
             .split(" ").filter { it.isNotEmpty() && !stop.contains(it) }.joinToString(" ")
     }

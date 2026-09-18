@@ -70,7 +70,7 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 L.log("FIX", "season fixtures +${fx.size}")
             } catch (_: Exception) {}
             // sports.bzzoiro.com (clé user) : 3e source, passé+à venir par équipe.
-            if (s.useBzApi && s.bzApiKey.isNotBlank()) {
+            if (!tailsFresh && s.useBzApi && s.bzApiKey.isNotBlank()) {
                 try {
                     val bz = com.widscore.data.BzApi
                     var okTeams = 0
@@ -81,7 +81,7 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                             L.log("BZ", "${t.name} team not found")
                             continue
                         }
-                        val evs = bz.getTeamEvents(s.bzApiKey, bzTeam.id)
+                        val evs = bz.getTeamEvents(s.bzApiKey, bzTeam.id, t.name)
                         if (evs == null) {
                             bz.record(t.name, false, 0, "fetch fail")
                             continue
@@ -101,7 +101,13 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                     L.log("BZ", "FAIL ${e.message}")
                 }
             }
-            if (s.useFdApi && s.fdApiKey.isNotBlank()) {
+            // Sources lentes (FD/BZ) : skip si cache frais (<90s) pour éviter
+            // les runs interminables ; ESPN tourne toujours. Headers restaurés
+            // dans tous les cas en fin de run (état pressé du bouton ⟳).
+            val cacheAt = Prefs.loadCache(ctx).first
+            val tailsFresh = cacheAt > 0 && (System.currentTimeMillis() - cacheAt) < 90_000L
+            if (tailsFresh) L.log("SYNC", "slow tails skipped (cache fresh)")
+            if (!tailsFresh && s.useFdApi && s.fdApiKey.isNotBlank()) {
                 // football-data.org (clé user, 10/min) : 2e source.
                 try {
                     val codes = fetch.mapNotNull { com.widscore.data.FDOrgApi.codeFor(it) }.distinct().take(8)
@@ -215,8 +221,10 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
         private const val ONE = "widscore-refresh-once"
         private const val PERIODIC = "widscore-refresh-periodic"
         fun enqueueOneShot(ctx: Context) {
+            // APPEND : les runs se sérialisent au lieu de s'annuler (les tails
+            // FD/BZ longs mouraient avec "Job was cancelled" sous REPLACE).
             WorkManager.getInstance(ctx).enqueueUniqueWork(
-                ONE, ExistingWorkPolicy.REPLACE,
+                ONE, ExistingWorkPolicy.APPEND,
                 OneTimeWorkRequestBuilder<WidgetUpdateWorker>().build()
             )
         }
