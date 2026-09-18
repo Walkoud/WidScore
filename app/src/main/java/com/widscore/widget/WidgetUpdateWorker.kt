@@ -69,6 +69,12 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 all += fx
                 L.log("FIX", "season fixtures +${fx.size}")
             } catch (_: Exception) {}
+            // Sources lentes (FD/BZ) : skip si cache frais (<90s) pour éviter
+            // les runs interminables ; ESPN tourne toujours. Headers restaurés
+            // dans tous les cas en fin de run (état pressé du bouton ⟳).
+            val cacheAt = Prefs.loadCache(ctx).first
+            val tailsFresh = cacheAt > 0 && (System.currentTimeMillis() - cacheAt) < 90_000L
+            if (tailsFresh) L.log("SYNC", "slow tails skipped (cache fresh)")
             // sports.bzzoiro.com (clé user) : 3e source, passé+à venir par équipe.
             if (!tailsFresh && s.useBzApi && s.bzApiKey.isNotBlank()) {
                 try {
@@ -101,12 +107,6 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                     L.log("BZ", "FAIL ${e.message}")
                 }
             }
-            // Sources lentes (FD/BZ) : skip si cache frais (<90s) pour éviter
-            // les runs interminables ; ESPN tourne toujours. Headers restaurés
-            // dans tous les cas en fin de run (état pressé du bouton ⟳).
-            val cacheAt = Prefs.loadCache(ctx).first
-            val tailsFresh = cacheAt > 0 && (System.currentTimeMillis() - cacheAt) < 90_000L
-            if (tailsFresh) L.log("SYNC", "slow tails skipped (cache fresh)")
             if (!tailsFresh && s.useFdApi && s.fdApiKey.isNotBlank()) {
                 // football-data.org (clé user, 10/min) : 2e source.
                 try {
