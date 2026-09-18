@@ -123,17 +123,17 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                     L.log("FD", "FAIL ${e.message}")
                 }
             }
-            // Dedup cross-sources : les ids diffèrent selon la source
-            // (ESPN numériques, "fd-", "bz-", vides). Même ligue + même jour +
-            // mêmes côtés (ids égaux, ou noms flous si id vide) = un seul.
+            // Dedup cross-sources : même jour + mêmes côtés (ids égaux, ou noms
+            // flous si id vide), même ligue OU (même score / tous sans score).
+            // Tue aussi les copies mal labellisées (ex. même match sous 2 ligues).
             // Ordre d'insertion = priorité (scoreboard/schedule d'abord).
             val kept = mutableListOf<com.widscore.data.EspnMatch>()
             for (m in all) {
                 val day = dayKey(m.utcMillis)
                 val dup = kept.any { k ->
-                    k.leagueSlug.equals(m.leagueSlug, ignoreCase = true) &&
-                        dayKey(k.utcMillis) == day &&
-                        sameSide(k.home, m.home) && sameSide(k.away, m.away)
+                    dayKey(k.utcMillis) == day &&
+                        sameSide(k.home, m.home) && sameSide(k.away, m.away) &&
+                        (k.leagueSlug.equals(m.leagueSlug, ignoreCase = true) || sameScore(k, m))
                 }
                 if (!dup) kept.add(m)
             }
@@ -198,6 +198,12 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
         val nb = normTeam(b.name)
         if (na.length < 4 || nb.length < 4) return na == nb
         return na == nb || na.contains(nb) || nb.contains(na)
+    }
+
+    private fun sameScore(a: com.widscore.data.EspnMatch, b: com.widscore.data.EspnMatch): Boolean {
+        if (a.isLive || b.isLive) return true // le live absorbe les copies statiques
+        if (a.isFinished && b.isFinished) return a.homeScore == b.homeScore && a.awayScore == b.awayScore
+        return !a.isFinished && !b.isFinished // deux à venir sans score
     }
 
     private fun normTeam(s: String): String {
