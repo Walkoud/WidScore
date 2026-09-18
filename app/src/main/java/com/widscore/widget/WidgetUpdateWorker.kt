@@ -26,17 +26,28 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
         val ctx = applicationContext
         val s = Prefs.load(ctx)
         return try {
-            val teamLeagues = s.teams.filter { it.kind == "team" && it.leagueSlug.isNotBlank() }
-                .map { it.leagueSlug.lowercase() }
-            val fetch = (s.leagues + teamLeagues).map { it.trim() }
+            // Copie RefreshAsync Palisades : une équipe suivie amène TOUTES ses ligues
+            // (directory monde : ex. Besiktas -> tur.1 + uefa.europa), pas juste sa ligue
+            // principale. Sans ça, les matchs européens sont invisibles.
+            val dirByTeam = com.widscore.data.RosterStore.loadCached(ctx)
+                .groupBy({ it.id }, { it.leagueSlug.lowercase() })
+            val favTeams = s.teams.filter { it.kind == "team" }
+            val teamLeagueMap = favTeams.associate { t ->
+                t.id to ((dirByTeam[t.id] ?: emptyList()) + listOf(t.leagueSlug.lowercase()))
+                    .map { it.trim() }.filter { it.isNotBlank() }.distinct()
+            }
+            val fetch = (s.leagues + teamLeagueMap.values.flatten()).map { it.trim() }
                 .filter { it.isNotBlank() }.distinct()
             val all = mutableListOf<com.widscore.data.EspnMatch>()
             for (lg in fetch) {
                 all += EspnApi.getMatches(lg)
                 kotlinx.coroutines.delay(150)
             }
-            for (t in s.teams.filter { it.kind == "team" }) {
-                if (t.leagueSlug.isNotBlank()) all += EspnApi.getTeamSchedule(t.leagueSlug, t.id, t.name)
+            // Backfill schedules par équipe ET par ligue (copie Palisades).
+            for (t in favTeams) {
+                for (lg in teamLeagueMap[t.id].orEmpty()) {
+                    all += EspnApi.getTeamSchedule(lg, t.id, t.name)
+                }
             }
             val seen = HashSet<String>()
             val dedup = all.filter { seen.add(it.leagueSlug.lowercase() + "/" + it.id) }
