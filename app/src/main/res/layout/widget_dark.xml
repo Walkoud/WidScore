@@ -1,56 +1,84 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Widget Dark : carte rounded 20dp, header fixe #9F9FFF, ListView scrollable. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="10dp"
-    android:background="#80000000">
+    android:background="@drawable/widget_bg_dark"
+    android:padding="6dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:background="@drawable/header_dark"
+        android:padding="8dp">
 
-        <TextView
-            android:id="@+id/header_title"
+        <LinearLayout
+            android:id="@+id/logo_box"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:background="@drawable/logo_box">
+
+            <TextView
+                android:id="@+id/logo_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚽"
+                android:textSize="20sp"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="⚽ WidScore"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:textColor="#F0F0F0" />
+            android:orientation="vertical"
+            android:gravity="center">
 
-        <TextView
-            android:id="@+id/live_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:textColor="#FF5F56" />
+            <TextView
+                android:id="@+id/live_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:textColor="#B71C1C" />
+
+            <TextView
+                android:id="@+id/header_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/btn_refresh"
-            android:layout_width="26dp"
-            android:layout_height="26dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:gravity="center"
             android:text="⟳"
-            android:textSize="14sp"
-            android:textColor="#80FFFFFF" />
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#212121" />
     </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/rows"
+    <ListView
+        android:id="@+id/match_list"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:layout_marginTop="6dp" />
+        android:layout_height="match_parent"
+        android:layout_marginTop="6dp"
+        android:divider="@null"
+        android:scrollbars="vertical" />
 
     <TextView
-        android:id="@+id/status_label"
+        android:id="@+id/empty_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="10sp"
-        android:textColor="#50FFFFFF" />
+        android:gravity="center"
+        android:padding="16dp"
+        android:textSize="11sp"
+        android:textColor="#8A8E96" />
 </LinearLayout>

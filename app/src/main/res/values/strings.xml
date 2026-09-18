@@ -2,7 +2,45 @@
 <resources>
     <string name="app_name">WidScore</string>
     <string name="widget_classic_name">WidScore Classic</string>
-    <string name="widget_classic_desc">Scores foot lignes classiques 2x2 redimensionnable (style Palisades).</string>
+    <string name="widget_classic_desc">Classic-rows football scores, 2x2 resizable scrollable widget.</string>
     <string name="widget_dark_name">WidScore Dark</string>
-    <string name="widget_dark_desc">Scores foot cartes sombres 2x2 redimensionnable (style Palisades).</string>
+    <string name="widget_dark_desc">Dark-cards football scores, 2x2 resizable scrollable widget.</string>
+
+    <!-- App -->
+    <string name="title_leagues">Leagues</string>
+    <string name="leagues_filter_hint">Filter leagues…</string>
+    <string name="title_search">Find teams &amp; leagues</string>
+    <string name="search_hint">Type a name (psg, besiktas, argentina…)</string>
+    <string name="directory_loading">Loading world teams… %1$d/%2$d</string>
+    <string name="directory_ready">%1$d teams available</string>
+    <string name="no_result">No match. Try another spelling.</string>
+    <string name="title_favorites">Favorites</string>
+    <string name="no_favorites">No favorites yet — search for a team or league above.</string>
+    <string name="title_settings">Settings</string>
+    <string name="set_refresh">Refresh (min)</string>
+    <string name="set_max">Max matches</string>
+    <string name="set_finished_hours">Keep finished (hours, 0 = hide)</string>
+    <string name="set_finished_pos">Finished position</string>
+    <string name="pos_top">Top</string>
+    <string name="pos_bottom">Bottom</string>
+    <string name="set_crests">Show crests</string>
+    <string name="set_finished_header">Finished / Upcoming headers</string>
+    <string name="set_click">On match tap</string>
+    <string name="click_details">Details</string>
+    <string name="click_google">Google search</string>
+    <string name="btn_refresh_now">Refresh widgets</string>
+    <string name="toast_refreshing">Refreshing widgets…</string>
+    <string name="lang_label">Language</string>
+
+    <!-- Widgets -->
+    <string name="w_today">Today</string>
+    <string name="w_tomorrow">Tomorrow</string>
+    <string name="w_yesterday">Yesterday</string>
+    <string name="w_finished">Finished</string>
+    <string name="w_upcoming">Upcoming</string>
+    <string name="w_live">LIVE</string>
+    <string name="w_ft">FT</string>
+    <string name="w_empty_setup">Open WidScore to pick leagues &amp; teams</string>
+    <string name="w_empty_none">No live or upcoming matches right now</string>
+    <string name="w_loading">Loading…</string>
 </resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- En-tête de date centrée dans la liste scrollable (groupes par jour). -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/date_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp"
+    android:textSize="12sp"
+    android:textColor="#E0E0E0" />

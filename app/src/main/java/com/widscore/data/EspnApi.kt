@@ -33,6 +33,9 @@ object EspnApi {
         } catch (_: Exception) { null } finally { conn?.disconnect() }
     }
 
+    // Accès brut pour RosterStore (ref-walk core.api, copie GetRawAsync).
+    suspend fun getRaw(url: String): String? = get(url)
+
     suspend fun getMatches(leagueSlug: String): List<EspnMatch> {
         val slug = leagueSlug.trim()
         if (slug.isEmpty()) return emptyList()

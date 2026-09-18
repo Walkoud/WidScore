@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Style 1 Classic rows : copie BuildRow Palisades (statut + ligue + Home score Away). -->
+<!-- Item Classic : statut + ligue, puis codes 3 lettres + crests + score (comme dark). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/item_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingBottom="8dp">
+    android:paddingLeft="6dp"
+    android:paddingRight="6dp"
+    android:paddingBottom="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -35,21 +37,22 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginTop="1dp">
+        android:layout_marginTop="2dp">
 
         <TextView
-            android:id="@+id/home_name"
+            android:id="@+id/home_code"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:gravity="right"
-            android:textSize="12sp"
+            android:textSize="13sp"
+            android:textStyle="bold"
             android:textColor="#F0F0F0" />
 
         <ImageView
             android:id="@+id/home_crest"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
             android:layout_marginLeft="4dp" />
 
         <TextView
@@ -58,23 +61,24 @@
             android:layout_height="wrap_content"
             android:layout_marginLeft="8dp"
             android:layout_marginRight="8dp"
-            android:textSize="13sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="#F0F0F0" />
 
         <ImageView
             android:id="@+id/away_crest"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
             android:layout_marginRight="4dp" />
 
         <TextView
-            android:id="@+id/away_name"
+            android:id="@+id/away_code"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:gravity="left"
-            android:textSize="12sp"
+            android:textSize="13sp"
+            android:textStyle="bold"
             android:textColor="#F0F0F0" />
     </LinearLayout>
 </LinearLayout>

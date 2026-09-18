@@ -1,4 +1,4 @@
-# WidScore — widget Android scores de match
+# WidScore — widget Android scores de match (v2)
 
 But : app Android WidScore affichant scores foot en widgets home-screen,
 copie système gadget Football de Palisades (`C:\Users\volka\Desktop\Palisades`,
@@ -6,73 +6,51 @@ copie système gadget Football de Palisades (`C:\Users\volka\Desktop\Palisades`,
 
 ## Copié de Palisades
 - API ESPN sans clé : `https://cdn.espn.com/core/soccer/scoreboard?league={slug}&xhr=1`
-  - JSON : `content.sbData.events[]` → `competitions[0]` → `status.type.state`
-    (`pre`/`in`/`post`), `displayClock`, `competitors[]` (`homeAway`, `team.id/displayName/abbreviation/logo`, `score`),
-    `date`, `id`. Nom ligue résolu via liste curée locale (CDN ne donne que calendrier).
-- Backfill terminés : `https://site.web.api.espn.com/apis/site/v2/sports/soccer/{league}/teams/{teamId}/schedule`
-  (matchs terminés déjà sortis fenêtre CDN), cache 30 min.
-- Détails match : `.../soccer/{league}/summary?event={eventId}` (buts/cartons/remplacements + stats).
-- Directory monde : toutes ligues ESPN, cache 30j (ici : cache mémoire + SharedPreferences, pas de world-roster complet — recherche équipes via matchs fetchés + ligues curées).
-- Ligues suivies par défaut : `eng.1 esp.1 ita.1 ger.1 fra.1 tur.1` (idem Palisades après migration).
-- Favoris : équipes (`id`, `name`, `leagueSlug`) + ligues (`id=slug`, `kind=league`) — suivre ligue = tous ses matchs.
-  Équipe suivie auto-abonne sa ligue (idem `SetFavorite` Palisades).
-- Tri : live d'abord, puis à venir par date, terminés placés haut/bas selon réglage.
-- Rétention terminés : `finishedHours` (0 = masquer aussitôt, estimation fin = kickoff + 115 min).
-- Refresh : réglable 1–60 min (défaut 10) ; ralenti x5 jusqu'à 15 min si aucun live ni coup d'envoi < 30 min (idem `TuneTimer`).
-  Sur Android : WorkManager périodique 15 min mini + refresh manuel bouton ⟳.
-- Clic match : ouvre détails (ou recherche Google selon réglage `details`/`google`).
-- Clic ☆/★ : follow/unfollow équipe/ligue directement.
+  (`content.sbData.events[]` → `competitions[0]` → `state` pre/in/post,
+  `displayClock`, `competitors[]`, nom ligue via liste curée).
+- Backfill terminés : `site.web.api/.../soccer/{league}/teams/{teamId}/schedule` (30 min).
+- Directory monde : `sports.core.api.espn.com/.../leagues/{slug}` → `teams.$ref`
+  → collection `limit=100` + pages → team details (id/displayName/abbreviation/logos),
+  cache disque 30j `football_rosters.json` (même forme que Palisades),
+  abonnées d'abord puis curated, recherche accents-stripés + alias FR.
+- Favoris équipes (`id/name/leagueSlug`) + ligues (`kind=league`) ; équipe suivie
+  auto-abonne sa ligue (copie `SetFavorite`). Tri live > à venir > terminés.
+- Rétention terminés kickoff + 115 min, `finishedHours` (0 = masquer).
+- Refresh 1–60 min (défaut 10) ; WorkManager 15 min mini + one-shot ⟳/prefs.
 
-## 2 styles (copie visuelle Palisades)
-1. **Classic rows** (`ScoreWidgetClassic`) : lignes transparentes —
-   statut (`● 67'` rouge `#FF5F56` live / `Today 21:00` gris / `date · FT` pâle),
-   ligue + ☆/★, `Home abbr/crest vs Away`, score gras centré.
-2. **Dark cards** (`ScoreWidgetDark`) : cartes `#18191C` radius 8dp —
-   bandes date (`Today` / `ddd dd/MM/yyyy` gris `#8A8E96`), 3 colonnes
-   (tri-code blanc bold 14sp + crest 28dp + ☆/★, centre score 16sp bold + `● clock`
-   rouge live / `FT` gris, watermark ⚽ 8% opacité), footer ligue centrée.
-   Accent `#7DD3FC`, texte `#F0F0F0`.
+## Widgets (scrollables, 2x2 redimensionnables, coins ronds 20dp)
+- **Structure** : carte rounded + header fixe + `ListView` scrollable
+  (`MatchListService` + factory, `notifyAppWidgetViewDataChanged`),
+  dates groupées centrées ("Today" / "Tomorrow, Fri 11.09."), sections
+  Finished/Upcoming, clic item → app ou Google (fill-in + template).
+- **Dark** (spec card/scroll) : fond `#121212`, header `#9F9FFF` top-rounded
+  (logo ⚽ blanc sur carré `#212121`, heure MAJ blanche 12sp centrée, refresh
+  40dp sombre — sans notif/corbeille), cartes match `#1E1E1E` 84dp
+  (blasons + heure/score gras centrés, watermark ⚽, codes 3 lettres dessous).
+- **Classic** : header `#1E1F22` top-rounded (titre + live + heure + refresh 40dp),
+  lignes statut + ligue + **codes 3 lettres** + crests + score gras.
 
-## Widgets Android
-- Taille défaut **2x2** : `targetCellWidth/Height=2`, `minWidth/Height=110dp`,
-  `minResizeWidth/Height=110dp`, `resizeMode="horizontal|vertical"`,
-  `widgetCategory="home_screen"`, `description` FR.
-- Providers : `ScoreWidgetClassicProvider`, `ScoreWidgetDarkProvider`
-  (extends `AppWidgetProvider`, `onUpdate` → `WidgetUpdateWorker.enqueueOneShot`,
-  bouton ⟳ → même worker).
-- Rendu : `RemoteViews` + conteneur `LinearLayout` rempli par items construits
-  en code (`WidgetRenderer`), max 8 matchs, crests chargés en bitmap synchrone
-  dans worker (cache mémoire LRU).
-- Redimension : layouts `flexibles` (scroll via `ListView`? non — `ScrollView`
-  interdit en widget ; liste tronquée à N selon hauteur : `maxMatches` + estimation
-  `minHeight` → 4/6/8 items).
+## App (EN par défaut + FR)
+- `values/strings.xml` anglais, `values-fr/` français ; switch EN/FR dans l'app
+  (`AppCompatDelegate` per-app locale) ; widgets localisés via contexte localisé.
+- Material3 cards : Ligues (filtre, **rien coché par défaut**), recherche auto
+  (debounce 400 ms, sans bouton) sur directory monde + ligues, Favoris en chips
+  supprimables, Réglages (refresh, max, terminés, position, clic, crests, headers).
+- Warm directory au lancement avec progression (`Loading world teams… n/total`).
 
-## App (config)
-- `MainActivity` : choix ligues suivies (multi-select depuis `CuratedLeagues`),
-  recherche équipes (filtre sur matchs fetchés + favoris), liste favoris avec
-  suppression, réglages : refresh, max matchs, crests on/off, finished hours,
-  position terminés, thème, format date, action clic. Bouton refresh manuel.
-- Stockage : `SharedPreferences "widscore"` JSON (mêmes champs que
-  `FootballSettings` Palisades : leagues, teams[{id,name,kind,leagueSlug}],
-  refreshMinutes, maxMatches, showCrests, finishedHours, finishedPosition,
-  finishedTextColor, showFinishedHeader, showFinishedDates, cardTheme,
-  matchClickAction, cardScale ignoré sur widget natif, dateFormat).
-- Permissions : `INTERNET`, `ACCESS_NETWORK_STATE`. `minSdk 26`, `targetSdk 34`,
-  Kotlin + WorkManager + org.json (pas de Retrofit/Gson pour rester léger).
-
-## Build
-Ouvrir `WidScore/` dans Android Studio (pas de SDK sur cette machine),
-`Sync Gradle` puis `Run`. Widgets ajoutables via long-press launcher →
-Widgets → WidScore Classic / WidScore Dark.
+## Build cloud
+`.github/workflows/build.yml` : push main → `assembleDebug` (Java 17, Gradle 8.7,
+SDK préinstallé runner) → artifact `WidScore-debug-apk` dans onglet Actions.
 
 ## Fichiers
 ```
 settings.gradle.kts / build.gradle.kts / gradle.properties
-app/build.gradle.kts / app/src/main/AndroidManifest.xml
-MainActivity.kt (config favoris/ligues/réglages)
-data/Models.kt, CuratedLeagues.kt, Prefs.kt, EspnApi.kt
-widget/ScoreWidgetClassicProvider.kt, ScoreWidgetDarkProvider.kt,
-       WidgetUpdateWorker.kt, WidgetRenderer.kt
-res/xml/*_info.xml, res/layout/widget_*.xml + item_*.xml,
-res/values/strings.xml colors.xml themes.xml
+app/build.gradle.kts / AndroidManifest.xml (+ MatchListService BIND_REMOTEVIEWS)
+MainActivity.kt / data/Models.kt Prefs.kt (cache matchs) Lang.kt RosterStore.kt
+  CuratedLeagues.kt EspnApi.kt (+getRaw)
+widget/Providers.kt MatchListService.kt (+CrestCache) WidgetUpdateWorker.kt WidgetRenderer.kt
+res/xml/*_info.xml (2x2, resize) / layout/widget_{classic,dark}.xml (ListView)
+  widget_item_{classic,dark}.xml widget_date_header.xml activity_main.xml (Material3)
+  drawable/widget_bg_*.xml header_*.xml match_card_dark.xml logo_box.xml
+  values/strings.xml values-fr/strings.xml colors.xml themes.xml
 ```

@@ -1,99 +1,229 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="12dp">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="⚽ WidScore"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Ligues suivies"
-            android:textStyle="bold"
-            android:layout_marginTop="12dp" />
-
+        <!-- Header : titre + langue + refresh -->
         <LinearLayout
-            android:id="@+id/leagues_box"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Recherche équipes / ligues"
-            android:textStyle="bold"
-            android:layout_marginTop="12dp" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="⚽ WidScore"
+                android:textSize="22sp"
+                android:textStyle="bold" />
 
-        <EditText
-            android:id="@+id/search_box"
+            <Button
+                android:id="@+id/btn_lang_en"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:text="EN" />
+
+            <Button
+                android:id="@+id/btn_lang_fr"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="4dp"
+                android:minWidth="48dp"
+                android:text="FR" />
+
+            <Button
+                android:id="@+id/btn_refresh_now"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="4dp"
+                android:text="⟳" />
+        </LinearLayout>
+
+        <!-- Ligues -->
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Tapez un nom (ex: real, psg, tur)…" />
+            android:layout_marginTop="8dp"
+            app:cardElevation="2dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/title_leagues"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/leagues_filter"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:hint="@string/leagues_filter_hint"
+                    android:inputType="text"
+                    android:singleLine="true" />
+
+                <LinearLayout
+                    android:id="@+id/leagues_box"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/leagues_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Recherche -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:cardElevation="2dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/title_search"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/search_box"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:hint="@string/search_hint"
+                    android:inputType="text"
+                    android:singleLine="true" />
+
+                <ProgressBar
+                    android:id="@+id/directory_progress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/search_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="11sp" />
+
+                <LinearLayout
+                    android:id="@+id/search_results"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Favoris -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:cardElevation="2dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/title_favorites"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/favs_chips"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" />
+
+                <LinearLayout
+                    android:id="@+id/favs_box"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Réglages -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:cardElevation="2dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/title_settings"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/set_refresh" />
+                <Spinner android:id="@+id/sp_refresh" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/set_max" />
+                <Spinner android:id="@+id/sp_max" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/set_finished_hours" />
+                <Spinner android:id="@+id/sp_finished_hours" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/set_finished_pos" />
+                <Spinner android:id="@+id/sp_finished_pos" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/set_click" />
+                <Spinner android:id="@+id/sp_click" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <CheckBox android:id="@+id/cb_crests" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/set_crests" />
+                <CheckBox android:id="@+id/cb_finished_header" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/set_finished_header" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <Button
-            android:id="@+id/btn_search"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Chercher" />
-
-        <LinearLayout
-            android:id="@+id/search_results"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Favoris"
-            android:textStyle="bold"
-            android:layout_marginTop="12dp" />
-
-        <LinearLayout
-            android:id="@+id/favs_box"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Réglages"
-            android:textStyle="bold"
-            android:layout_marginTop="12dp" />
-
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Refresh (min)" />
-        <Spinner android:id="@+id/sp_refresh" android:layout_width="match_parent" android:layout_height="wrap_content" />
-
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Matchs max" />
-        <Spinner android:id="@+id/sp_max" android:layout_width="match_parent" android:layout_height="wrap_content" />
-
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Garder terminés (heures, 0 = masquer)" />
-        <Spinner android:id="@+id/sp_finished_hours" android:layout_width="match_parent" android:layout_height="wrap_content" />
-
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Position terminés" />
-        <Spinner android:id="@+id/sp_finished_pos" android:layout_width="match_parent" android:layout_height="wrap_content" />
-
-        <CheckBox android:id="@+id/cb_crests" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Afficher écussons" />
-        <CheckBox android:id="@+id/cb_finished_header" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Titres Finished/Upcoming" />
-
-        <Button
-            android:id="@+id/btn_refresh_now"
+            android:id="@+id/btn_refresh_big"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="Actualiser widgets" />
+            android:text="@string/btn_refresh_now" />
     </LinearLayout>
 </ScrollView>

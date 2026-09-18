@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WidScore</string>
+    <string name="widget_classic_name">WidScore Classic</string>
+    <string name="widget_classic_desc">Scores foot en lignes classiques, widget scrollable 2x2 redimensionnable.</string>
+    <string name="widget_dark_name">WidScore Dark</string>
+    <string name="widget_dark_desc">Scores foot en cartes sombres, widget scrollable 2x2 redimensionnable.</string>
+
+    <!-- App -->
+    <string name="title_leagues">Ligues</string>
+    <string name="leagues_filter_hint">Filtrer les ligues…</string>
+    <string name="title_search">Trouver équipes &amp; ligues</string>
+    <string name="search_hint">Tapez un nom (psg, besiktas, argentine…)</string>
+    <string name="directory_loading">Chargement équipes monde… %1$d/%2$d</string>
+    <string name="directory_ready">%1$d équipes dispo</string>
+    <string name="no_result">Aucun résultat. Essayez une autre orthographe.</string>
+    <string name="title_favorites">Favoris</string>
+    <string name="no_favorites">Aucun favori — cherchez une équipe ou ligue ci-dessus.</string>
+    <string name="title_settings">Réglages</string>
+    <string name="set_refresh">Actualisation (min)</string>
+    <string name="set_max">Matchs max</string>
+    <string name="set_finished_hours">Garder terminés (heures, 0 = masquer)</string>
+    <string name="set_finished_pos">Position terminés</string>
+    <string name="pos_top">Haut</string>
+    <string name="pos_bottom">Bas</string>
+    <string name="set_crests">Afficher écussons</string>
+    <string name="set_finished_header">Titres Terminés / À venir</string>
+    <string name="set_click">Au tap sur match</string>
+    <string name="click_details">Détails</string>
+    <string name="click_google">Recherche Google</string>
+    <string name="btn_refresh_now">Actualiser widgets</string>
+    <string name="toast_refreshing">Actualisation widgets…</string>
+    <string name="lang_label">Langue</string>
+
+    <!-- Widgets -->
+    <string name="w_today">Aujourd\'hui</string>
+    <string name="w_tomorrow">Demain</string>
+    <string name="w_yesterday">Hier</string>
+    <string name="w_finished">Terminés</string>
+    <string name="w_upcoming">À venir</string>
+    <string name="w_live">EN DIRECT</string>
+    <string name="w_ft">Fin</string>
+    <string name="w_empty_setup">Ouvrez WidScore pour choisir ligues &amp; équipes</string>
+    <string name="w_empty_none">Aucun match en ce moment</string>
+    <string name="w_loading">Chargement…</string>
+</resources>
