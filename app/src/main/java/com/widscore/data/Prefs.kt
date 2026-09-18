@@ -92,22 +92,33 @@ object Prefs {
         } catch (_: Exception) {}
     }
 
-    // Rapport synchro (rate limit 429 visible dans l'app).
-    fun saveReport(ctx: Context, at: Long, report: List<EspnApi.LeagueStatus>, totalMatches: Int) {
+    // Rapport synchro (rate limit 429 + backfill + rétention visibles dans l'app).
+    fun saveReport(
+        ctx: Context, at: Long, report: List<EspnApi.LeagueStatus>, totalMatches: Int,
+        hiddenOld: Int, schedules: List<EspnApi.ScheduleStatus>
+    ) {
         try {
             val o = JSONObject()
                 .put("at", at)
                 .put("totalMatches", totalMatches)
+                .put("hiddenOld", hiddenOld)
                 .put("leagues", JSONArray(report.map {
                     JSONObject().put("league", it.league).put("ok", it.ok)
                         .put("count", it.count).put("rate", it.rateLimited)
+                }))
+                .put("schedules", JSONArray(schedules.map {
+                    JSONObject().put("teamId", it.teamId).put("team", it.team)
+                        .put("league", it.league).put("ok", it.ok).put("count", it.count)
                 }))
             ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
                 .putString(KEY_REPORT, o.toString()).apply()
         } catch (_: Exception) {}
     }
 
-    data class SyncReport(val at: Long, val totalMatches: Int, val leagues: List<EspnApi.LeagueStatus>)
+    data class SyncReport(
+        val at: Long, val totalMatches: Int, val hiddenOld: Int,
+        val leagues: List<EspnApi.LeagueStatus>, val schedules: List<EspnApi.ScheduleStatus>
+    )
 
     fun loadReport(ctx: Context): SyncReport? {
         return try {
@@ -125,7 +136,18 @@ object Prefs {
                     )
                 )
             }
-            SyncReport(o.optLong("at"), o.optInt("totalMatches"), list)
+            val sarr = o.optJSONArray("schedules") ?: JSONArray()
+            val slist = mutableListOf<EspnApi.ScheduleStatus>()
+            for (i in 0 until sarr.length()) {
+                val l = sarr.getJSONObject(i)
+                slist.add(
+                    EspnApi.ScheduleStatus(
+                        l.optString("teamId"), l.optString("team"), l.optString("league"),
+                        l.optBoolean("ok"), l.optInt("count")
+                    )
+                )
+            }
+            SyncReport(o.optLong("at"), o.optInt("totalMatches"), o.optInt("hiddenOld"), list, slist)
         } catch (_: Exception) { null }
     }
 

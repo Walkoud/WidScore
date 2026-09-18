@@ -36,14 +36,19 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 kotlinx.coroutines.delay(150)
             }
             for (t in s.teams.filter { it.kind == "team" }) {
-                if (t.leagueSlug.isNotBlank()) all += EspnApi.getTeamSchedule(t.leagueSlug, t.id)
+                if (t.leagueSlug.isNotBlank()) all += EspnApi.getTeamSchedule(t.leagueSlug, t.id, t.name)
             }
             val seen = HashSet<String>()
             val dedup = all.filter { seen.add(it.leagueSlug.lowercase() + "/" + it.id) }
             val shown = EspnApi.applySettings(dedup, s)
             val now = System.currentTimeMillis()
             Prefs.saveCache(ctx, shown, now)
-            Prefs.saveReport(ctx, now, EspnApi.lastReport, shown.size)
+            // Terminés masqués par la rétention (diagnostic "match passé invisible").
+            val hiddenOld = if (s.finishedHours <= 0) dedup.count { it.isFinished }
+            else dedup.count {
+                it.isFinished && (now - (it.utcMillis + 115 * 60_000L)) > s.finishedHours * 3600_000L
+            }
+            Prefs.saveReport(ctx, now, EspnApi.lastReport, shown.size, hiddenOld, EspnApi.lastSchedules)
 
             val mgr = AppWidgetManager.getInstance(ctx)
             val emptySetup = s.leagues.isEmpty() && s.teams.isEmpty()

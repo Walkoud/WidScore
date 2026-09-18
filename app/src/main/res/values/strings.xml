@@ -57,6 +57,8 @@
     <string name="sync_leagues">%1$d/%2$d leagues OK</string>
     <string name="sync_failed">Failed: %1$s</string>
     <string name="sync_ratelimit">ESPN rate-limited, retry later</string>
+    <string name="sync_hidden">%1$d finished hidden by retention (%2$dh) — raise “Keep finished”</string>
+    <string name="sync_failed_short">failed</string>
     <string name="set_scale">Widget text size</string>
     <string name="set_compact">Compact mode</string>
     <string name="set_date_format">Date format</string>

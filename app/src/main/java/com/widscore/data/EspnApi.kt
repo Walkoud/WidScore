@@ -17,7 +17,10 @@ object EspnApi {
 
     // Statut dernière synchro par ligue (affiché dans l'app : erreurs, rate limit 429).
     data class LeagueStatus(val league: String, val ok: Boolean, val count: Int, val rateLimited: Boolean)
+    // Backfill schedules par équipe suivie (matchs terminés hors fenêtre CDN).
+    data class ScheduleStatus(val teamId: String, val team: String, val league: String, val ok: Boolean, val count: Int)
     @Volatile var lastReport: List<LeagueStatus> = emptyList()
+    @Volatile var lastSchedules: List<ScheduleStatus> = emptyList()
     @Volatile var lastSyncAt: Long = 0L
 
     private suspend fun getWithCode(url: String): Pair<String?, Int> = withContext(Dispatchers.IO) {
@@ -66,12 +69,26 @@ object EspnApi {
         lastSyncAt = System.currentTimeMillis()
     }
 
-    suspend fun getTeamSchedule(leagueSlug: String, teamId: String): List<EspnMatch> {
+    suspend fun getTeamSchedule(leagueSlug: String, teamId: String, teamName: String = ""): List<EspnMatch> {
         val body = get(
             "https://site.web.api.espn.com/apis/site/v2/sports/soccer/" +
                 "${Uri.encode(leagueSlug)}/teams/${Uri.encode(teamId)}/schedule"
-        ) ?: return emptyList()
-        return try { parseSchedule(body, leagueSlug) } catch (_: Exception) { emptyList() }
+        )
+        if (body == null) {
+            lastSchedules = (lastSchedules.filter { it.teamId != teamId } +
+                ScheduleStatus(teamId, teamName.ifBlank { teamId }, leagueSlug, false, 0)).takeLast(20)
+            return emptyList()
+        }
+        return try {
+            val list = parseSchedule(body, leagueSlug)
+            lastSchedules = (lastSchedules.filter { it.teamId != teamId } +
+                ScheduleStatus(teamId, teamName.ifBlank { teamId }, leagueSlug, true, list.size)).takeLast(20)
+            list
+        } catch (_: Exception) {
+            lastSchedules = (lastSchedules.filter { it.teamId != teamId } +
+                ScheduleStatus(teamId, teamName.ifBlank { teamId }, leagueSlug, false, 0)).takeLast(20)
+            emptyList()
+        }
     }
 
     // Tri Palisades CompareMatches : live > à venir (date) > terminés.
