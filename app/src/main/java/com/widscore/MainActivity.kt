@@ -301,6 +301,10 @@ class MainActivity : AppCompatActivity() {
         val ok = rep.leagues.count { it.ok }
         val sb = StringBuilder()
         sb.append(getString(R.string.sync_ok, time, rep.totalMatches)).append("\n")
+        val cur = settings()
+        if (!cur.useEspn) sb.append("ESPN ${getString(R.string.src_off)}\n")
+        if (!cur.useFdApi) sb.append("FD ${getString(R.string.src_off)}\n")
+        if (!cur.useBzApi) sb.append("BZ ${getString(R.string.src_off)}\n")
         sb.append(getString(R.string.sync_leagues, ok, rep.leagues.size))
         for (lg in rep.leagues) {
             sb.append("\n• ${lg.league}: ${lg.count}")
@@ -484,6 +488,9 @@ class MainActivity : AppCompatActivity() {
             c.matchClickAction = if (p == 1) "google" else "details"
         }
         bindCheck(R.id.cb_crests, s.showCrests) { c, v -> c.showCrests = v }
+        bindCheck(R.id.cb_src_espn, s.useEspn) { c, v -> c.useEspn = v }
+        bindCheck(R.id.cb_src_fd, s.useFdApi) { c, v -> c.useFdApi = v }
+        bindCheck(R.id.cb_src_bz, s.useBzApi) { c, v -> c.useBzApi = v }
         bindCheck(R.id.cb_finished_header, s.showFinishedHeader) { c, v -> c.showFinishedHeader = v }
         bindCheck(R.id.cb_compact, s.compact) { c, v -> c.compact = v }
         bindCheck(R.id.cb_show_league, s.showLeague) { c, v -> c.showLeague = v }

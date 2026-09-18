@@ -373,6 +373,13 @@
                             android:text="@string/src_espn"
                             android:textSize="12sp" />
 
+                        <CheckBox
+                            android:id="@+id/cb_src_espn"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/enabled"
+                            android:textSize="15sp" />
+
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -381,6 +388,13 @@
                             android:text="@string/src_fd"
                             android:textSize="12sp" />
 
+                        <CheckBox
+                            android:id="@+id/cb_src_fd"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/enabled"
+                            android:textSize="15sp" />
+
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -388,6 +402,13 @@
                             android:autoLink="web"
                             android:text="@string/src_bz"
                             android:textSize="12sp" />
+
+                        <CheckBox
+                            android:id="@+id/cb_src_bz"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/enabled"
+                            android:textSize="15sp" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 

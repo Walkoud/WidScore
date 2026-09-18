@@ -49,6 +49,7 @@ object Prefs {
         .put("useFdApi", s.useFdApi)
         .put("bzApiKey", s.bzApiKey)
         .put("useBzApi", s.useBzApi)
+        .put("useEspn", s.useEspn)
 
     fun fromJson(o: JSONObject): FootballSettings {
         val s = FootballSettings()
@@ -89,6 +90,7 @@ object Prefs {
         s.useFdApi = o.optBoolean("useFdApi", true)
         s.bzApiKey = o.optString("bzApiKey", "")
         s.useBzApi = o.optBoolean("useBzApi", true)
+        s.useEspn = o.optBoolean("useEspn", true)
         return s
     }
 

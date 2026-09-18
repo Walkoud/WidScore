@@ -44,31 +44,35 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
             val fetch = (s.leagues + teamLeagueMap.values.flatten()).map { it.trim() }
                 .filter { it.isNotBlank() }.distinct()
             val all = mutableListOf<com.widscore.data.EspnMatch>()
-            for (lg in fetch) {
-                val before = all.size
-                all += EspnApi.getMatches(lg)
-                L.log("ESPN", "$lg +${all.size - before}")
-                kotlinx.coroutines.delay(150)
-            }
-            L.log("ESPN", "scoreboards total=${all.size}")
-            // Backfill schedules par équipe ET par ligue (copie Palisades).
-            for (t in favTeams) {
-                for (lg in teamLeagueMap[t.id].orEmpty()) {
+            if (!s.useEspn) {
+                L.log("ESPN", "skipped (disabled)")
+            } else {
+                for (lg in fetch) {
                     val before = all.size
-                    all += EspnApi.getTeamSchedule(lg, t.id, t.name)
-                    L.log("SCHED", "${t.name}/$lg +${all.size - before}")
+                    all += EspnApi.getMatches(lg)
+                    L.log("ESPN", "$lg +${all.size - before}")
+                    kotlinx.coroutines.delay(150)
                 }
+                L.log("ESPN", "scoreboards total=${all.size}")
+                // Backfill schedules par équipe ET par ligue (copie Palisades).
+                for (t in favTeams) {
+                    for (lg in teamLeagueMap[t.id].orEmpty()) {
+                        val before = all.size
+                        all += EspnApi.getTeamSchedule(lg, t.id, t.name)
+                        L.log("SCHED", "${t.name}/$lg +${all.size - before}")
+                    }
+                }
+                // Fixtures saison (core.api team events, cache 24h) : matchs à venir
+                // garantis même hors fenêtre CDN et hors schedules.
+                try {
+                    val triples = favTeams.flatMap { t ->
+                        teamLeagueMap[t.id].orEmpty().map { lg -> Triple(lg, t.id, t.name) }
+                    }
+                    val fx = com.widscore.data.TeamEventsStore.refresh(ctx, triples)
+                    all += fx
+                    L.log("FIX", "season fixtures +${fx.size}")
+                } catch (_: Exception) {}
             }
-            // Fixtures saison (core.api team events, cache 24h) : matchs à venir
-            // garantis même hors fenêtre CDN et hors schedules.
-            try {
-                val triples = favTeams.flatMap { t ->
-                    teamLeagueMap[t.id].orEmpty().map { lg -> Triple(lg, t.id, t.name) }
-                }
-                val fx = com.widscore.data.TeamEventsStore.refresh(ctx, triples)
-                all += fx
-                L.log("FIX", "season fixtures +${fx.size}")
-            } catch (_: Exception) {}
             // Sources lentes (FD/BZ) : skip si cache frais (<90s) pour éviter
             // les runs interminables ; ESPN tourne toujours. Headers restaurés
             // dans tous les cas en fin de run (état pressé du bouton ⟳).

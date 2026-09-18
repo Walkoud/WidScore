@@ -76,6 +76,8 @@
     <string name="col_accent">Bleu accent</string>
     <string name="set_show_league">Afficher ligue (classic)</string>
     <string name="title_sources">Sources de données</string>
+    <string name="enabled">Activé</string>
+    <string name="src_off">off</string>
     <string name="src_espn">ESPN — sans clé.\nDirect + à venir (fenêtre courante) + terminés récents + détails. 150ms entre appels, pas de quota publié.</string>
     <string name="src_fd">football-data.org — clé gratuite :\nhttps://www.football-data.org/client/register\nGratuit : 10 req/min. Saison complète (à venir + terminés + direct sans minute) pour 12 compétitions (PL, PD, SA, BL1, FL1, DED, PPL, CL, EC, WC, ELC, BSA) + écussons. Pas de Süper Lig.</string>
     <string name="src_bz">sports.bzzoiro.com — token (inscription) :\nhttps://sports.bzzoiro.com/\nPassés + à venir par équipe sur 88 ligues (Süper Lig incluse), direct avec minute, sans écussons. 400ms entre appels, pas de quota publié.</string>

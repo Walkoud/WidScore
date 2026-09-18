@@ -97,5 +97,7 @@ data class FootballSettings(
     var useFdApi: Boolean = true,
     // sports.bzzoiro.com (3e source, clé user).
     var bzApiKey: String = "",
-    var useBzApi: Boolean = true
+    var useBzApi: Boolean = true,
+    // Interrupteurs par source.
+    var useEspn: Boolean = true
 )
