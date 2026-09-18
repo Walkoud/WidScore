@@ -123,16 +123,22 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                     L.log("FD", "FAIL ${e.message}")
                 }
             }
-            val seen = HashSet<String>()
-            val seenFixture = HashSet<String>()
-            val dedup = all.filter { m ->
-                // Même event (id) OU même affiche le même jour (sources multiples
-                // scoreboard/schedule/sweep/fixtures saison) = un seul.
-                seen.add(m.leagueSlug.lowercase() + "/" + m.id) &&
-                    seenFixture.add(
-                        m.leagueSlug.lowercase() + "/" + m.home.id + "/" + m.away.id + "/" + dayKey(m.utcMillis)
-                    )
+            // Dedup cross-sources : les ids diffèrent selon la source
+            // (ESPN numériques, "fd-", "bz-", vides). Même ligue + même jour +
+            // mêmes côtés (ids égaux, ou noms flous si id vide) = un seul.
+            // Ordre d'insertion = priorité (scoreboard/schedule d'abord).
+            val kept = mutableListOf<com.widscore.data.EspnMatch>()
+            for (m in all) {
+                val day = dayKey(m.utcMillis)
+                val dup = kept.any { k ->
+                    k.leagueSlug.equals(m.leagueSlug, ignoreCase = true) &&
+                        dayKey(k.utcMillis) == day &&
+                        sameSide(k.home, m.home) && sameSide(k.away, m.away)
+                }
+                if (!dup) kept.add(m)
             }
+            val dedup = kept
+            L.log("SYNC", "dedup ${all.size} -> ${dedup.size}")
             val shown = EspnApi.applySettings(dedup, s)
             val now = System.currentTimeMillis()
             Prefs.saveCache(ctx, shown, now)
@@ -184,8 +190,25 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
         }
     }
 
-    private fun dayKey(millis: Long): String {
-        if (millis <= 0) return "?"
+    private fun sameSide(a: com.widscore.data.EspnTeam, b: com.widscore.data.EspnTeam): Boolean {
+        if (a.id.isNotBlank() && b.id.isNotBlank()) return a.id == b.id
+        // Id vide d'un côté : compare noms normalisés (accents ignorés),
+        // containment dans un sens (ex. "marseille" vs "olympique marseille").
+        val na = normTeam(a.name)
+        val nb = normTeam(b.name)
+        if (na.length < 4 || nb.length < 4) return na == nb
+        return na == nb || na.contains(nb) || nb.contains(na)
+    }
+
+    private fun normTeam(s: String): String {
+        val dec = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
+        return java.text.Normalizer.normalize(dec, java.text.Normalizer.Form.NFC)
+            .filter { it.category != CharCategory.NON_SPACING_MARK }
+            .map { if (it.isLetterOrDigit() || it == ' ') it else ' ' }.joinToString("")
+            .split(" ").filter { it.isNotEmpty() }.joinToString(" ")
+    }
+
+    private fun dayKey(millis: Long): String {        if (millis <= 0) return "?"
         val c = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
         c.timeInMillis = millis
         return "%d-%d".format(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.DAY_OF_YEAR))
