@@ -125,7 +125,95 @@ object EspnApi {
         } catch (_: Exception) { null }
     }
 
-    // Tri Palisades CompareMatches : live > à venir (date) > terminés.
+    // Fixtures saison d'une équipe (core.api team events) : TOUTE la saison,
+    // y compris matchs à venir hors fenêtre CDN et hors schedules.
+    // Léger : headers event (date + nom), sans competitors (1 appel par fixture).
+    data class TeamFixture(val eventId: String, val utcMillis: Long, val homeName: String, val awayName: String)
+
+    private fun seasonYear(): Int {
+        val cal = java.util.Calendar.getInstance()
+        val year = cal.get(java.util.Calendar.YEAR)
+        // Saison août-mai : avant juillet, saison commencée l'année précédente.
+        return if (cal.get(java.util.Calendar.MONTH) >= java.util.Calendar.JULY) year else year - 1
+    }
+
+    suspend fun getTeamFixtures(leagueSlug: String, teamId: String): List<TeamFixture>? {
+        return try {
+            val base = "https://sports.core.api.espn.com/v2/sports/soccer/leagues/" +
+                android.net.Uri.encode(leagueSlug.trim()) + "/seasons/" + seasonYear() +
+                "/teams/" + android.net.Uri.encode(teamId.trim()) + "/events?lang=en&region=us"
+            val refs = getRefList(base)
+            if (refs.isEmpty()) return emptyList()
+            val out = mutableListOf<TeamFixture>()
+            for (ref in refs) {
+                val (body, _) = getWithCode(fixRef(ref))
+                if (body == null) continue
+                try {
+                    val json = JSONObject(body)
+                    val id = json.optString("id")
+                    val date = parseDateUtc(json.optString("date"))
+                    val name = json.optString("name")
+                    if (id.isBlank() || date <= 0 || name.isBlank()) continue
+                    val (home, away) = splitFixtureName(name) ?: continue
+                    out.add(TeamFixture(id, date, home, away))
+                } catch (_: Exception) {}
+            }
+            out
+        } catch (_: Exception) { null }
+    }
+
+    // "Racing Santander at Barcelona" -> home=Barcelona, away=Racing ("X at Y").
+    // "Barcelona vs Sevilla" -> home=Barcelona, away=Sevilla.
+    private fun splitFixtureName(name: String): Pair<String, String>? {
+        val atIdx = name.indexOf(" at ", ignoreCase = true)
+        if (atIdx > 0) {
+            val away = name.substring(0, atIdx).trim()
+            val home = name.substring(atIdx + 4).trim()
+            if (away.isNotEmpty() && home.isNotEmpty()) return home to away
+        }
+        val vsIdx = name.indexOf(" vs ", ignoreCase = true)
+        if (vsIdx > 0) {
+            val home = name.substring(0, vsIdx).trim()
+            val away = name.substring(vsIdx + 4).trim()
+            if (home.isNotEmpty() && away.isNotEmpty()) return home to away
+        }
+        return null
+    }
+
+    private suspend fun getRefList(collectionUrl: String): List<String> {
+        val refs = mutableListOf<String>()
+        return try {
+            val sep = if (collectionUrl.contains("?")) "&" else "?"
+            var next: String? = collectionUrl + sep + "limit=100"
+            var pages = 0
+            while (next != null && pages < 10 && refs.size < 500) {
+                pages++
+                val (body, _) = getWithCode(next) ?: break
+                val json = JSONObject(body)
+                val items = json.optJSONArray("items") ?: break
+                for (i in 0 until items.length()) {
+                    val r = items.optJSONObject(i)?.optString("\$ref") ?: ""
+                    if (r.isNotBlank()) refs.add(r)
+                }
+                next = null
+                if (json.optInt("pageCount", 1) > json.optInt("pageIndex", 1)) {
+                    next = collectionUrl + sep + "limit=100&page=" + (json.optInt("pageIndex", 1) + 1)
+                }
+            }
+            refs
+        } catch (_: Exception) { refs }
+    }
+
+    private fun fixRef(url: String): String {
+        return if (url.startsWith("http://", ignoreCase = true)) "https://" + url.substring(7) else url
+    }
+
+    private fun parseDateUtc(s: String): Long {
+        if (s.isBlank()) return 0L
+        return try {
+            java.time.OffsetDateTime.parse(s).toInstant().toEpochMilli()
+        } catch (_: Exception) { 0L }
+    }
     fun sortMatches(list: List<EspnMatch>): List<EspnMatch> =
         list.sortedWith(compareBy({ !it.isLive }, { it.isFinished }, { it.utcMillis }))
 

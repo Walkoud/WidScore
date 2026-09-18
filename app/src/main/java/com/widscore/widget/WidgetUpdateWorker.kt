@@ -49,6 +49,14 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                     all += EspnApi.getTeamSchedule(lg, t.id, t.name)
                 }
             }
+            // Fixtures saison (core.api team events, cache 24h) : matchs à venir
+            // garantis même hors fenêtre CDN et hors schedules.
+            try {
+                val triples = favTeams.flatMap { t ->
+                    teamLeagueMap[t.id].orEmpty().map { lg -> Triple(lg, t.id, t.name) }
+                }
+                all += com.widscore.data.TeamEventsStore.refresh(ctx, triples)
+            } catch (_: Exception) {}
             val seen = HashSet<String>()
             val dedup = all.filter { seen.add(it.leagueSlug.lowercase() + "/" + it.id) }
             val shown = EspnApi.applySettings(dedup, s)
