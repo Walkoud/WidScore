@@ -128,16 +128,15 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 }
             }
             // Backfill écussons : les sources sans logos (BZ, fixtures) récupèrent
-            // ceux d'ESPN via index nom normalisé exact (+ abbr exact).
+            // ceux d'ESPN UNIQUEMENT si >=90% pareil (isSameClub), sinon rien.
             try {
-                val logoByName = HashMap<String, String>()
-                val logoByAbbr = HashMap<String, String>()
+                data class LogoEntry(val name: String, val abbr: String, val logo: String)
+                val index = mutableListOf<LogoEntry>()
                 fun putTeam(name: String, abbr: String, logo: String) {
-                    if (logo.isBlank()) return
-                    val n = com.widscore.data.RosterStore.norm(name)
-                    if (n.isNotBlank()) logoByName.putIfAbsent(n, logo)
-                    val a = abbr.trim().uppercase()
-                    if (a.length >= 2) logoByAbbr.putIfAbsent(a, logo)
+                    if (logo.isBlank() || name.isBlank()) return
+                    if (index.none { it.name == name && it.logo == logo }) {
+                        index.add(LogoEntry(name, abbr, logo))
+                    }
                 }
                 for (t in com.widscore.data.RosterStore.loadCached(ctx)) {
                     putTeam(t.name, t.abbr, t.logo)
@@ -152,15 +151,16 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 for (m in all) {
                     for (side in listOf(m.home, m.away)) {
                         if (side.logo.isNotBlank()) continue
-                        val logo = logoByName[com.widscore.data.RosterStore.norm(side.name)]
-                            ?: logoByAbbr[side.abbr.trim().uppercase()].orEmpty()
-                        if (logo.isNotBlank()) {
-                            side.logo = logo
+                        val hit = index.firstOrNull {
+                            com.widscore.data.RosterStore.isSameClub(side.name, side.abbr, it.name, it.abbr)
+                        }
+                        if (hit != null) {
+                            side.logo = hit.logo
                             filled++
                         }
                     }
                 }
-                L.log("LOGOS", "backfilled +$filled")
+                L.log("LOGOS", "backfilled +$filled (index ${index.size})")
             } catch (e: Exception) {
                 L.log("LOGOS", "FAIL ${e.message}")
             }

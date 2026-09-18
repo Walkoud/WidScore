@@ -336,9 +336,73 @@ object RosterStore {
         return if (url.startsWith("http://", ignoreCase = true)) "https://" + url.substring(7) else url
     }
 
-    // Recherche tolérante : accents/casse/espaces/ponctuation ignorés,
-    // chaque mot de la requête doit apparaître (contenu) dans le nom.
-    // Dedup par id comme GetKnownTeams Palisades (1 ligne par équipe).
+    // Similarité noms de clubs 0..1 (containment = 1, sinon Jaro-Winkler).
+    // Seuil 0.90 pour attribuer un écusson : en dessous, on n'en met pas.
+    fun nameSimilarity(a: String, b: String): Double {
+        val x = norm(a).replace(" ", "")
+        val y = norm(b).replace(" ", "")
+        if (x.isEmpty() || y.isEmpty()) return 0.0
+        if (x == y || x.contains(y) || y.contains(x)) return 1.0
+        return jaroWinkler(x, y)
+    }
+
+    private fun jaroWinkler(x: String, y: String): Double {
+        if (x == y) return 1.0
+        val xl = x.length
+        val yl = y.length
+        if (xl == 0 || yl == 0) return 0.0
+        val window = maxOf(xl, yl) / 2 - 1
+        val xMatch = BooleanArray(xl)
+        val yMatch = BooleanArray(yl)
+        var m = 0
+        for (i in 0 until xl) {
+            val lo = maxOf(0, i - window)
+            val hi = minOf(yl - 1, i + window)
+            var j = lo
+            while (j <= hi) {
+                if (!yMatch[j] && x[i] == y[j]) {
+                    xMatch[i] = true; yMatch[j] = true; m++
+                    break
+                }
+                j++
+            }
+        }
+        if (m == 0) return 0.0
+        var t = 0
+        var k = 0
+        for (i in 0 until xl) {
+            if (!xMatch[i]) continue
+            while (!yMatch[k]) k++
+            if (x[i] != y[k]) t++
+            k++
+        }
+        t /= 2
+        val jaro = (m.toDouble() / xl + m.toDouble() / yl + (m - t).toDouble() / m) / 3.0
+        var prefix = 0
+        while (prefix < 4 && prefix < xl && prefix < yl && x[prefix] == y[prefix]) prefix++
+        return jaro + prefix * 0.1 * (1.0 - jaro)
+    }
+
+    // Même club ? nom >=90% OU abbr égale + 1ers tokens compatibles.
+    fun isSameClub(nameA: String, abbrA: String, nameB: String, abbrB: String): Boolean {
+        if (nameSimilarity(nameA, nameB) >= 0.90) return true
+        val aa = abbrA.trim().uppercase()
+        val ab = abbrB.trim().uppercase()
+        if (aa.length >= 3 && aa == ab) {
+            val fa = norm(nameA).split(" ").firstOrNull().orEmpty()
+            val fb = norm(nameB).split(" ").firstOrNull().orEmpty()
+            if (fa.isNotEmpty() && fb.isNotEmpty() &&
+                (fa == fb || commonPrefix(fa, fb) >= 5)
+            ) return true
+        }
+        return false
+    }
+
+    private fun commonPrefix(a: String, b: String): Int {
+        var i = 0
+        while (i < a.length && i < b.length && a[i] == b[i]) i++
+        return i
+    }
     fun search(teams: List<RosterTeam>, query: String): List<RosterTeam> {
         val deduped = dedup(teams)
         val q = norm(query)
