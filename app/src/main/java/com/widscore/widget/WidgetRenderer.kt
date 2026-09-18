@@ -269,6 +269,8 @@ object WidgetRenderer {
         val yesterday = (today.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }
         val d = Date(millis)
         if (same(today)) return lctx.getString(R.string.w_today)
+        val tomorrow = (today.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 1) }
+        if (same(tomorrow)) return lctx.getString(R.string.w_tomorrow)
         if (same(yesterday)) return lctx.getString(R.string.w_yesterday)
         return when (s.dateFormat) {
             "numeric" -> SimpleDateFormat("dd/MM/yy", locale).format(d)

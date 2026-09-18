@@ -64,6 +64,16 @@ data class EspnMatch(
     }
 }
 
+// Source d'un match (convention d'ids cross-sources : fd-{id}, bz-{id}, sinon ESPN
+// = scoreboards + schedules + fixtures). Utilisé pour purger le widget quand
+// une API est désactivée.
+val EspnMatch.source: String
+    get() = when {
+        id.startsWith("fd-") -> "fd"
+        id.startsWith("bz-") -> "bz"
+        else -> "espn"
+    }
+
 data class FavTeam(
     val id: String = "",
     val name: String = "",

@@ -11,6 +11,7 @@ import com.widscore.R
 import com.widscore.data.FootballSettings
 import com.widscore.data.Lang
 import com.widscore.data.Prefs
+import com.widscore.data.source
 import java.net.URL
 
 // Liste scrollable des widgets (ListView) : lit le cache du worker,
@@ -52,7 +53,16 @@ class MatchListService : RemoteViewsService() {
             settings = Prefs.load(ctx)
             val lctx = Lang.localizedContext(ctx)
             val (_, matches) = Prefs.loadCache(ctx)
-            val shown = matches.take(settings.maxMatches.coerceIn(1, 50))
+            // Garde-fou : jamais de match d'une source désactivée (le cache est
+            // purgé au save, mais un worker annulé peut laisser des restes).
+            val allowed = matches.filter {
+                when (it.source) {
+                    "fd" -> settings.useFdApi && settings.fdApiKey.isNotBlank()
+                    "bz" -> settings.useBzApi && settings.bzApiKey.isNotBlank()
+                    else -> settings.useEspn
+                }
+            }
+            val shown = allowed.take(settings.maxMatches.coerceIn(1, 50))
             val locale = Lang.localeOf(ctx)
             val grouped = WidgetRenderer.buildRows(
                 shown, settings, locale,

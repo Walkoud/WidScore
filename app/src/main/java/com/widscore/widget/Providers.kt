@@ -68,6 +68,21 @@ abstract class BaseScoreProvider : AppWidgetProvider() {
             val i = Intent(ctx, MainActivity::class.java)
             return PendingIntent.getActivity(ctx, 1, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
+        // Recharge les ListView sans reconstruire les headers (ex. après purge
+        // du cache au toggle d'une API : effet immédiat avant la fin du worker).
+        fun notifyDataChanged(ctx: Context) {
+            try {
+                val mgr = AppWidgetManager.getInstance(ctx)
+                for (comp in listOf(
+                    android.content.ComponentName(ctx, ScoreWidgetClassicProvider::class.java),
+                    android.content.ComponentName(ctx, ScoreWidgetDarkProvider::class.java)
+                )) {
+                    for (id in mgr.getAppWidgetIds(comp)) {
+                        try { mgr.notifyAppWidgetViewDataChanged(id, R.id.match_list) } catch (_: Exception) {}
+                    }
+                }
+            } catch (_: Exception) {}
+        }
     }
 }
 

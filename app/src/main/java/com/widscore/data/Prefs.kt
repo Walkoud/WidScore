@@ -94,6 +94,27 @@ object Prefs {
         return s
     }
 
+    // Retire du cache widget les matchs des sources désactivées (ou sans clé,
+    // le worker ne pouvant les reconstruire). Retourne true si le cache a
+    // changé. Appelé au save des réglages pour un effet immédiat, sans
+    // attendre la fin du worker (fetch FD ~1 min).
+    fun pruneDisabledSources(ctx: Context, s: FootballSettings): Boolean {
+        return try {
+            val (at, matches) = loadCache(ctx)
+            if (matches.isEmpty()) return false
+            val kept = matches.filter {
+                when (it.source) {
+                    "fd" -> s.useFdApi && s.fdApiKey.isNotBlank()
+                    "bz" -> s.useBzApi && s.bzApiKey.isNotBlank()
+                    else -> s.useEspn
+                }
+            }
+            if (kept.size == matches.size) return false
+            saveCache(ctx, kept, at)
+            true
+        } catch (_: Exception) { false }
+    }
+
     // Dernier jeu de matchs affiché (écrit par le worker, lu par les factories ListView).
     fun saveCache(ctx: Context, matches: List<EspnMatch>, updatedAt: Long) {
         try {

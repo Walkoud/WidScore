@@ -56,7 +56,24 @@ object EspnApi {
             return emptyList()
         }
         return try {
-            val list = parseScoreboard(body, slug)
+            val list = parseScoreboard(body, slug).toMutableList()
+            // Port Palisades dd5d542 : le CDN est une fenêtre courante étroite
+            // et ignore dates= -> les à-venir n'apparaissent jamais. site.web.api
+            // honore ?dates=YYYYMMDD (non bloqué Akamai) -> on merge J/J+1/J+2
+            // locaux (le widget affiche des jours locaux) par-dessus la base CDN.
+            try {
+                val seen = list.map { it.id }.toHashSet()
+                val sdf = SimpleDateFormat("yyyyMMdd", Locale.US)
+                val cal = java.util.Calendar.getInstance()
+                for (off in 0..2) {
+                    cal.timeInMillis = System.currentTimeMillis()
+                    cal.add(java.util.Calendar.DAY_OF_YEAR, off)
+                    val day = sdf.format(cal.time)
+                    for (extra in getWebApiDay(slug, day)) {
+                        if (seen.add(extra.id)) list.add(extra)
+                    }
+                }
+            } catch (_: Exception) {}
             recordStatus(slug, true, list.size, false)
             list
         } catch (_: Exception) {
@@ -101,6 +118,26 @@ object EspnApi {
         val (body, _) = getWithCode(url)
         if (body == null) return null
         return try { parseSchedule(body, leagueSlug) } catch (_: Exception) { null }
+    }
+
+    // Scoreboard du jour via site.web.api (honore ?dates=YYYYMMDD, non bloqué
+    // Akamai). Vide en cas d'échec : ne casse jamais la base CDN.
+    // Port Palisades dd5d542 (GetWebApiDayAsync/ParseWebApiScoreboard).
+    private suspend fun getWebApiDay(slug: String, yyyymmdd: String): List<EspnMatch> {
+        return try {
+            val (body, _) = getWithCode(
+                "https://site.web.api.espn.com/apis/site/v2/sports/soccer/" +
+                    Uri.encode(slug.trim()) + "/scoreboard?dates=" + yyyymmdd
+            )
+            if (body == null) return emptyList()
+            parseSchedule(body, slug).onEach {
+                if (it.state == "pre") {
+                    // web.api envoie des scores factices "0" pour les non-joués.
+                    it.homeScore = null
+                    it.awayScore = null
+                }
+            }
+        } catch (_: Exception) { emptyList() }
     }
 
     // Balaye les 6 derniers jours du scoreboard CDN pour une équipe

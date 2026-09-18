@@ -339,6 +339,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun persist(s: FootballSettings) {
         Prefs.save(this, s)
+        // Effet immédiat : les matchs des APIs coupées (ou sans clé) sortent
+        // du widget sans attendre la fin du worker (fetch FD ~1 min).
+        try {
+            if (Prefs.pruneDisabledSources(this, s)) BaseScoreProvider.notifyDataChanged(this)
+        } catch (_: Exception) {}
         WidgetUpdateWorker.enqueueOneShot(this)
     }
 
