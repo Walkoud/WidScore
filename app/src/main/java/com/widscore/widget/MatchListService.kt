@@ -17,6 +17,7 @@ import java.net.URL
 // regroupe par date, items classic (codes) ou dark (spec card).
 class MatchListService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
+        com.widscore.data.LogStore.init(this)
         return MatchFactory(applicationContext, intent.getBooleanExtra(EXTRA_DARK, false))
     }
 
@@ -53,6 +54,22 @@ class MatchListService : RemoteViewsService() {
                 lctx.getString(R.string.w_finished),
                 lctx.getString(R.string.w_upcoming)
             )
+            // Log des rows réellement rendues (preview) : compare avec l'affichage.
+            try {
+                val L = com.widscore.data.LogStore
+                L.log("ROWS", "dark=$dark n=${rows.size}")
+                val fmt = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.US)
+                for (r in rows.take(40)) {
+                    when (r) {
+                        is WidgetRenderer.Row.Date -> L.log("ROW", "DATE :: ${r.text}")
+                        is WidgetRenderer.Row.Match -> {
+                            val m = r.match
+                            val sc = if (m.homeScore != null && m.awayScore != null) " ${m.homeScore}-${m.awayScore}" else ""
+                            L.log("ROW", "M :: ${fmt.format(java.util.Date(m.utcMillis))} ${m.home.name} vs ${m.away.name}$sc [${m.leagueSlug}] ${m.state}")
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
         }
 
         override fun getViewAt(position: Int): RemoteViews? {
