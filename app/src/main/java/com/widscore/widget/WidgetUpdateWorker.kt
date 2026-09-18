@@ -123,21 +123,50 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                     L.log("FD", "FAIL ${e.message}")
                 }
             }
-            // Dedup cross-sources : même jour + mêmes côtés (ids égaux, ou noms
-            // flous si id vide), même ligue OU (même score / tous sans score).
-            // Tue aussi les copies mal labellisées (ex. même match sous 2 ligues).
-            // Ordre d'insertion = priorité (scoreboard/schedule d'abord).
+            // Dedup v3 cross-sources : ids hétérogènes (ESPN, "fd-", "bz-", vides)
+            // + noms abrégés ("Amed SFK" vs "Amed Sportif Faaliyetler", tokens) +
+            // dates en conflit inter-sources (10/10 vs 11/10).
+            // Passe 1 : même jour + mêmes côtés + (même ligue OU même score).
+            // Passe 2 : même ligue + mêmes côtés même si jours diffèrent
+            // (conflit de dates). Aller/retour (côtés inversés) jamais mergés.
+            // À égalité : live > score > ESPN-numerique > premier.
+            fun idRank(m: com.widscore.data.EspnMatch): Int =
+                if (m.id.startsWith("fd-") || m.id.startsWith("bz-")) 1 else 0
+            fun stateRank(m: com.widscore.data.EspnMatch): Int = when {
+                m.isLive -> 3
+                m.isFinished && m.homeScore != null -> 2
+                m.isFinished -> 1
+                else -> 0
+            }
+            fun better(c: com.widscore.data.EspnMatch, k: com.widscore.data.EspnMatch): Boolean {
+                if (stateRank(c) != stateRank(k)) return stateRank(c) > stateRank(k)
+                return idRank(c) < idRank(k)
+            }
             val kept = mutableListOf<com.widscore.data.EspnMatch>()
             for (m in all) {
                 val day = dayKey(m.utcMillis)
-                val dup = kept.any { k ->
+                val idx = kept.indexOfFirst { k ->
                     dayKey(k.utcMillis) == day &&
                         sameSide(k.home, m.home) && sameSide(k.away, m.away) &&
                         (k.leagueSlug.equals(m.leagueSlug, ignoreCase = true) || sameScore(k, m))
                 }
-                if (!dup) kept.add(m)
+                if (idx < 0) kept.add(m)
+                else if (better(m, kept[idx])) kept[idx] = m
             }
-            val dedup = kept
+            val final = mutableListOf<com.widscore.data.EspnMatch>()
+            for (m in kept) {
+                val idx = final.indexOfFirst { k ->
+                    k.leagueSlug.equals(m.leagueSlug, ignoreCase = true) &&
+                        sameSide(k.home, m.home) && sameSide(k.away, m.away)
+                }
+                if (idx < 0) final.add(m)
+                else {
+                    val keepNew = better(m, final[idx])
+                    L.log("DEDUP", "date-conflict ${m.home.name} vs ${m.away.name} -> ${if (keepNew) "new" else "kept"}")
+                    if (keepNew) final[idx] = m
+                }
+            }
+            val dedup = final
             L.log("SYNC", "dedup ${all.size} -> ${dedup.size}")
             val shown = EspnApi.applySettings(dedup, s)
             val now = System.currentTimeMillis()
@@ -197,12 +226,47 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
 
     private fun sameSide(a: com.widscore.data.EspnTeam, b: com.widscore.data.EspnTeam): Boolean {
         if (a.id.isNotBlank() && b.id.isNotBlank()) return a.id == b.id
-        // Id vide d'un côté : compare noms normalisés (accents ignorés),
-        // containment dans un sens (ex. "marseille" vs "olympique marseille").
+        // Id vide d'un côté : noms normalisés (accents ignorés).
         val na = normTeam(a.name)
         val nb = normTeam(b.name)
-        if (na.length < 4 || nb.length < 4) return na == nb
-        return na == nb || na.contains(nb) || nb.contains(na)
+        // Nom court (ex. "psg") : match abbr ou initiales de l'autre.
+        if (na.length < 4 || nb.length < 4) {
+            if (na == nb) return true
+            if (na.length < 4 && (na == b.abbr.lowercase() || na == initials(nb))) return true
+            if (nb.length < 4 && (nb == a.abbr.lowercase() || nb == initials(na))) return true
+            return false
+        }
+        if (na == nb || na.contains(nb) || nb.contains(na)) return true
+        // Tokens : 1er token commun (prefixe >=6) + 2e signal
+        // (token partagé, initiales, abbr). Ex. "amed sfk" = "amed sportif faaliyetler".
+        // Les 2 côtés doivent matcher (appelant), donc pas de faux derby.
+        val ta = na.split(" ")
+        val tb = nb.split(" ")
+        val fa = ta.firstOrNull().orEmpty()
+        val fb = tb.firstOrNull().orEmpty()
+        if (fa.isEmpty() || fb.isEmpty()) return false
+        if (!(fa == fb || commonPrefixLen(fa, fb) >= 6)) return false
+        if (a.abbr.isNotBlank() && b.abbr.isNotBlank() && a.abbr.equals(b.abbr, ignoreCase = true)) return true
+        val ra = ta.drop(1)
+        val rb = tb.drop(1)
+        if (ra.any { x -> x.length >= 4 && rb.contains(x) }) return true
+        val ia = initials(na)
+        val ib = initials(nb)
+        if (ia.isNotEmpty() && ib.isNotEmpty() && (ia.startsWith(ib) || ib.startsWith(ia))) return true
+        val abA = a.abbr.uppercase()
+        val abB = b.abbr.uppercase()
+        if (abA.length >= 2 && (abA == ib || ib.startsWith(abA) || abA.startsWith(ib))) return true
+        if (abB.length >= 2 && (abB == ia || ia.startsWith(abB) || abB.startsWith(ia))) return true
+        return false
+    }
+
+    private fun initials(n: String): String =
+        n.split(" ").mapNotNull { it.firstOrNull() }.joinToString("")
+
+    private fun commonPrefixLen(a: String, b: String): Int {
+        var i = 0
+        while (i < a.length && i < b.length && a[i] == b[i]) i++
+        return i
     }
 
     private fun sameScore(a: com.widscore.data.EspnMatch, b: com.widscore.data.EspnMatch): Boolean {

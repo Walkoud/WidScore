@@ -315,26 +315,63 @@ async function run() {
     }
   }
 
-  // ---- DEDUP (copie exacte 1.2.9) ----
-  const kept = [];
+  // ---- DEDUP v3 (copie exacte Android) ----
+  const initials = n => n.split(' ').map(w=>w[0]||'').join('');
+  const cpfx = (a,b) => { let i=0; while(i<a.length&&i<b.length&&a[i]===b[i]) i++; return i; };
   const sameSide = (a,b) => {
     if (a.id && b.id) return a.id===b.id;
     const na=norm(a.name), nb=norm(b.name);
-    if (na.length<4||nb.length<4) return na===nb;
-    return na===nb||na.includes(nb)||nb.includes(na);
+    if (na.length<4||nb.length<4) {
+      if (na===nb) return true;
+      if (na.length<4 && (na===(b.abbr||'').toLowerCase()||na===initials(nb))) return true;
+      if (nb.length<4 && (nb===(a.abbr||'').toLowerCase()||nb===initials(na))) return true;
+      return false;
+    }
+    if (na===nb||na.includes(nb)||nb.includes(na)) return true;
+    const ta=na.split(' '), tb=nb.split(' ');
+    const fa=ta[0]||'', fb=tb[0]||'';
+    if (!fa||!fb||!(fa===fb||cpfx(fa,fb)>=6)) return false;
+    if (a.abbr&&b.abbr&&a.abbr.toUpperCase()===b.abbr.toUpperCase()) return true;
+    const ra=ta.slice(1), rb=tb.slice(1);
+    if (ra.some(x=>x.length>=4&&rb.includes(x))) return true;
+    const ia=initials(na), ib=initials(nb);
+    if (ia&&ib&&(ia.startsWith(ib)||ib.startsWith(ia))) return true;
+    const abA=(a.abbr||'').toUpperCase(), abB=(b.abbr||'').toUpperCase();
+    if (abA.length>=2&&(abA===ib||ib.startsWith(abA)||abA.startsWith(ib))) return true;
+    if (abB.length>=2&&(abB===ia||ia.startsWith(abB)||abB.startsWith(ia))) return true;
+    return false;
   };
   const sameScore = (a,b) => {
     if (a.state==='in'||b.state==='in') return true;
     if (a.state==='post'&&b.state==='post') return a.hs===b.hs&&a.as===b.as;
     return a.state!=='post'&&b.state!=='post';
   };
+  const idRank = m => (m.id.startsWith('fd-')||m.id.startsWith('bz-'))?1:0;
+  const stRank = m => m.state==='in'?3:(m.state==='post'?(m.hs!=null?2:1):0);
+  const better = (c,k) => stRank(c)!==stRank(k)?stRank(c)>stRank(k):idRank(c)<idRank(k);
+  const kept = [];
   for (const {m, source} of ALL) {
     const day = dayK(m.utc);
-    const hit = kept.find(k => dayK(k.m.utc)===day && sameSide(k.m.home,m.home) && sameSide(k.m.away,m.away) &&
+    const idx = kept.findIndex(k => dayK(k.m.utc)===day && sameSide(k.m.home,m.home) && sameSide(k.m.away,m.away) &&
       (k.m.leagueSlug.toLowerCase()===m.leagueSlug.toLowerCase() || sameScore(k.m,m)));
-    if (hit) DROPPED.push({m, source, reason:`doublon de #${kept.indexOf(hit)+1} (${hit.source})`});
-    else kept.push({m, source});
+    if (idx<0) kept.push({m, source});
+    else {
+      if (better(m, kept[idx].m)) kept[idx] = {m, source};
+      DROPPED.push({m, source, reason:`doublon de (${kept[idx].source})`});
+    }
   }
+  const final = [];
+  for (const {m, source} of kept) {
+    const idx = final.findIndex(k => k.m.leagueSlug.toLowerCase()===m.leagueSlug.toLowerCase() && sameSide(k.m.home,m.home) && sameSide(k.m.away,m.away));
+    if (idx<0) final.push({m, source});
+    else {
+      const keepNew = better(m, final[idx].m);
+      DROPPED.push({m, source, reason:`conflit-date -> ${keepNew?'new':'kept'} (${final[idx].source})`});
+      if (keepNew) final[idx] = {m, source};
+    }
+  }
+  for (const e of final) { const i = kept.indexOf(e); }
+  kept.length = 0; for (const e of final) kept.push(e);
   log('DEDUP', `${ALL.length} -> ${kept.length} (drop ${DROPPED.length})`);
 
   // ---- APPLY SETTINGS ----
