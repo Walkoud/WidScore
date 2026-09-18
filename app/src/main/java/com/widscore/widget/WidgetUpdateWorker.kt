@@ -153,6 +153,11 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 com.widscore.data.BzApi.lastStatuses
             )
             L.log("SYNC", "fetched=${all.size} shown=${shown.size} hiddenOld=$hiddenOld live=${shown.count { it.isLive }}")
+            val fmt = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.US)
+            for (m in shown.take(15)) {
+                val sc = if (m.homeScore != null && m.awayScore != null) " ${m.homeScore}-${m.awayScore}" else ""
+                L.log("SHOW", "${fmt.format(java.util.Date(m.utcMillis))} ${m.home.name} vs ${m.away.name}$sc [${m.leagueSlug}] ${m.state} id=${m.id}")
+            }
 
             val mgr = AppWidgetManager.getInstance(ctx)
             val emptySetup = s.leagues.isEmpty() && s.teams.isEmpty()
