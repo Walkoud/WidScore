@@ -29,22 +29,21 @@ class MatchListService : RemoteViewsService() {
     }
 
     class MatchFactory(private val ctx: Context, private val dark: Boolean) : RemoteViewsFactory {
-        private var rows: List<WidgetRenderer.Row> = emptyList()
+        // UN SEUL type de vue (item match avec ligne date intégrée) : aucun
+        // recyclage inter-layouts possible -> pas de logos/textes fantômes.
+        data class Item(val match: com.widscore.data.EspnMatch, val dateLabel: String)
+        private var rows: List<Item> = emptyList()
         private var settings: FootballSettings = FootballSettings()
 
         override fun onCreate() {}
         override fun onDestroy() {}
         override fun getCount() = rows.size
-        override fun getViewTypeCount() = 2 // 0 = date header, 1 = match
+        override fun getViewTypeCount() = 1
         // Ids stables : sans ça certains launchers dupliquent ou mélangent
         // les lignes quand le dataset change entre 2 updates.
-        // (RemoteViewsFactory n'a pas getItemViewType : les vues sont
-        // reconstruites à chaque getViewAt, pas recyclées.)
         override fun getItemId(p: Int): Long {
-            return when (val r = rows[p]) {
-                is WidgetRenderer.Row.Date -> ("D" + r.text).hashCode().toLong()
-                is WidgetRenderer.Row.Match -> (r.match.leagueSlug + "/" + r.match.id).hashCode().toLong()
-            }
+            val r = rows[p]
+            return (r.match.leagueSlug + "/" + r.match.id).hashCode().toLong()
         }
         override fun hasStableIds() = true
         override fun getLoadingView(): RemoteViews? = null
@@ -55,7 +54,7 @@ class MatchListService : RemoteViewsService() {
             val (_, matches) = Prefs.loadCache(ctx)
             val shown = matches.take(settings.maxMatches.coerceIn(1, 50))
             val locale = Lang.localeOf(ctx)
-            rows = WidgetRenderer.buildRows(
+            val grouped = WidgetRenderer.buildRows(
                 shown, settings, locale,
                 lctx.getString(R.string.w_today),
                 lctx.getString(R.string.w_tomorrow),
@@ -63,47 +62,50 @@ class MatchListService : RemoteViewsService() {
                 lctx.getString(R.string.w_finished),
                 lctx.getString(R.string.w_upcoming)
             )
+            // Aplatit : la date surplombante devient le label du 1er match suivant.
+            val items = mutableListOf<Item>()
+            var pending = ""
+            for (r in grouped) {
+                when (r) {
+                    is WidgetRenderer.Row.Date -> pending = r.text
+                    is WidgetRenderer.Row.Match -> {
+                        items.add(Item(r.match, pending))
+                        pending = ""
+                    }
+                }
+            }
+            rows = items
             // Log des rows réellement rendues (preview) : compare avec l'affichage.
             try {
                 val L = com.widscore.data.LogStore
                 L.log("ROWS", "dark=$dark n=${rows.size}")
                 val fmt = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.US)
                 for (r in rows.take(40)) {
-                    when (r) {
-                        is WidgetRenderer.Row.Date -> L.log("ROW", "DATE :: ${r.text}")
-                        is WidgetRenderer.Row.Match -> {
-                            val m = r.match
-                            val sc = if (m.homeScore != null && m.awayScore != null) " ${m.homeScore}-${m.awayScore}" else ""
-                            L.log("ROW", "M :: ${fmt.format(java.util.Date(m.utcMillis))} ${m.home.name} vs ${m.away.name}$sc [${m.leagueSlug}] ${m.state}")
-                        }
-                    }
+                    val m = r.match
+                    val sc = if (m.homeScore != null && m.awayScore != null) " ${m.homeScore}-${m.awayScore}" else ""
+                    L.log("ROW", "M :: ${fmt.format(java.util.Date(m.utcMillis))} ${m.home.name} vs ${m.away.name}$sc [${m.leagueSlug}] ${m.state}" + if (r.dateLabel.isNotEmpty()) " §${r.dateLabel}" else "")
                 }
             } catch (_: Exception) {}
         }
 
         override fun getViewAt(position: Int): RemoteViews? {
             return try {
-                when (val row = rows[position]) {
-                    is WidgetRenderer.Row.Date -> {
-                        val v = RemoteViews(ctx.packageName, R.layout.widget_date_header)
-                        v.setTextViewText(R.id.date_text, row.text)
-                        v
-                    }
-                    is WidgetRenderer.Row.Match -> {
-                        val m = row.match
-                        val lctx = Lang.localizedContext(ctx)
-                        val item = if (dark) WidgetRenderer.buildDarkItem(ctx, m, settings)
-                        else WidgetRenderer.buildClassicItem(ctx, m, settings, lctx)
-                        WidgetRenderer.applyItemScale(item, m, settings, dark)
-                        // Clic item -> template (MainActivity MATCH) complété par fill-in.
-                        val fill = Intent().apply {
-                            putExtra(EXTRA_LEAGUE, m.leagueSlug)
-                            putExtra(EXTRA_MATCH_ID, m.id)
-                            putExtra(EXTRA_TITLE, "${m.home.name} vs ${m.away.name}")
-                        }
-                        item.setOnClickFillInIntent(R.id.item_root, fill)
-                        item
-                    }
+                val row = rows[position]
+                val m = row.match
+                val lctx = Lang.localizedContext(ctx)
+                val item = if (dark) WidgetRenderer.buildDarkItem(ctx, m, settings, row.dateLabel)
+                else WidgetRenderer.buildClassicItem(ctx, m, settings, lctx, row.dateLabel)
+                WidgetRenderer.applyItemScale(item, m, settings, dark)
+                // Clic item -> template (MainActivity MATCH) complété par fill-in.
+                val fill = Intent().apply {
+                    putExtra(EXTRA_LEAGUE, m.leagueSlug)
+                    putExtra(EXTRA_MATCH_ID, m.id)
+                    putExtra(EXTRA_TITLE, "${m.home.name} vs ${m.away.name}")
+                }
+                item.setOnClickFillInIntent(R.id.item_root, fill)
+                item
+            } catch (_: Exception) { null }
+        }
                 }
             } catch (_: Exception) { null }
         }

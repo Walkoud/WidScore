@@ -11,8 +11,8 @@ android {
         applicationId = "com.widscore"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.3.3"
+        versionCode = 19
+        versionName = "1.3.4"
     }
     buildTypes {
         release {

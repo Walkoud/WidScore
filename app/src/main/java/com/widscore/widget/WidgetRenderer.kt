@@ -140,31 +140,44 @@ object WidgetRenderer {
         return n.filter { it.isLetterOrDigit() }.take(3).uppercase().ifBlank { "?" }
     }
 
-    // Item classic : statut + ligue + codes 3 lettres + score.
-    fun buildClassicItem(ctx: Context, m: EspnMatch, s: FootballSettings, lctx: Context): RemoteViews {
+    // Item classic : date intégrée + statut + ligue + codes + score.
+    // TOUT est posé explicitement (texte, couleur, image, visibilité) :
+    // jamais de résidu d'une vue recyclée (logos fantômes).
+    fun buildClassicItem(ctx: Context, m: EspnMatch, s: FootballSettings, lctx: Context, dateLabel: String = ""): RemoteViews {
         val item = RemoteViews(ctx.packageName, R.layout.widget_item_classic)
+        item.setTextViewText(R.id.date_line, dateLabel)
+        item.setViewVisibility(R.id.date_line, if (dateLabel.isEmpty()) View.GONE else View.VISIBLE)
         val (status, color) = statusText(m, s, lctx)
         item.setTextViewText(R.id.status, status)
         try { item.setTextColor(R.id.status, Color.parseColor(color)) } catch (_: Exception) {}
         item.setTextViewText(R.id.league, "☆ ${m.leagueName.ifBlank { m.leagueSlug }}")
+        item.setViewVisibility(R.id.league, if (!s.showLeague || s.compact) View.GONE else View.VISIBLE)
         item.setTextViewText(R.id.home_code, triCode(m.home.name, m.home.abbr))
         item.setTextViewText(R.id.away_code, triCode(m.away.name, m.away.abbr))
         val score = if ((m.isLive || m.isFinished) && m.homeScore != null && m.awayScore != null)
             "${m.homeScore} - ${m.awayScore}" else "vs"
         item.setTextViewText(R.id.score, score)
         try { item.setTextColor(R.id.score, Color.parseColor(if (m.isLive) LIVE else "#F0F0F0")) } catch (_: Exception) {}
-        if (s.showCrests) {
-            CrestCache.get(m.home.logo)?.let { item.setImageViewBitmap(R.id.home_crest, it) }
-            CrestCache.get(m.away.logo)?.let { item.setImageViewBitmap(R.id.away_crest, it) }
-        } else {
-            item.setViewVisibility(R.id.home_crest, View.GONE)
-            item.setViewVisibility(R.id.away_crest, View.GONE)
-        }
+        setCrest(item, R.id.home_crest, if (s.showCrests) m.home.logo else "")
+        setCrest(item, R.id.away_crest, if (s.showCrests) m.away.logo else "")
         return item
     }
 
+    // Pose un crest OU un placeholder transparent (chasse les logos fantômes
+    // des vues recyclées : une absence de set laisse l'ancienne image).
+    private fun setCrest(item: RemoteViews, viewId: Int, url: String) {
+        val bmp = if (url.isBlank()) null else CrestCache.get(url)
+        if (bmp != null) {
+            item.setImageViewBitmap(viewId, bmp)
+            item.setViewVisibility(viewId, View.VISIBLE)
+        } else {
+            try { item.setImageViewResource(viewId, android.R.color.transparent) } catch (_: Exception) {}
+            item.setViewVisibility(viewId, View.VISIBLE)
+        }
+    }
+
     // Item dark spec : layout selon block size (S 52dp / M 64dp / L 78dp) + scale textes.
-    fun buildDarkItem(ctx: Context, m: EspnMatch, s: FootballSettings): RemoteViews {
+    fun buildDarkItem(ctx: Context, m: EspnMatch, s: FootballSettings, dateLabel: String = ""): RemoteViews {
         val layout = when (s.blockSize) {
             "small" -> R.layout.widget_item_dark_s
             "large" -> R.layout.widget_item_dark_l
@@ -177,6 +190,8 @@ object WidgetRenderer {
             else -> Triple(11f, 14f, 8f)
         }
         val item = RemoteViews(ctx.packageName, layout)
+        item.setTextViewText(R.id.date_line, dateLabel)
+        item.setViewVisibility(R.id.date_line, if (dateLabel.isEmpty()) View.GONE else View.VISIBLE)
         item.setTextViewText(R.id.home_code, triCode(m.home.name, m.home.abbr))
         item.setTextViewText(R.id.away_code, triCode(m.away.name, m.away.abbr))
         val (main, sub, subColor) = when {
@@ -201,8 +216,8 @@ object WidgetRenderer {
         item.setTextViewTextSize(R.id.center_main, android.util.TypedValue.COMPLEX_UNIT_SP, baseMain * k)
         item.setTextViewTextSize(R.id.center_sub, android.util.TypedValue.COMPLEX_UNIT_SP, baseSub * k)
         if (s.showCrests) {
-            CrestCache.get(m.home.logo)?.let { item.setImageViewBitmap(R.id.home_crest, it) }
-            CrestCache.get(m.away.logo)?.let { item.setImageViewBitmap(R.id.away_crest, it) }
+            setCrest(item, R.id.home_crest, m.home.logo)
+            setCrest(item, R.id.away_crest, m.away.logo)
         } else {
             item.setViewVisibility(R.id.home_crest, View.GONE)
             item.setViewVisibility(R.id.away_crest, View.GONE)
