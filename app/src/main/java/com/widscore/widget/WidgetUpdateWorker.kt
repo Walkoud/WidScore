@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import android.util.LruCache
 import android.widget.RemoteViews
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -83,7 +84,7 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
             // TuneTimer Palisades : ralenti si rien de chaud — WorkManager mini 15 min.
             val every = 15L // base mini ; refresh <15 géré par one-shot au déverrouillage/clic
             WorkManager.getInstance(ctx).enqueueUniquePeriodicWork(
-                PERIODIC, ExistingWorkPolicy.KEEP,
+                PERIODIC, ExistingPeriodicWorkPolicy.KEEP,
                 PeriodicWorkRequestBuilder<WidgetUpdateWorker>(every, TimeUnit.MINUTES).build()
             )
         }
