@@ -60,7 +60,15 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 all += com.widscore.data.TeamEventsStore.refresh(ctx, triples)
             } catch (_: Exception) {}
             val seen = HashSet<String>()
-            val dedup = all.filter { seen.add(it.leagueSlug.lowercase() + "/" + it.id) }
+            val seenFixture = HashSet<String>()
+            val dedup = all.filter { m ->
+                // Même event (id) OU même affiche le même jour (sources multiples
+                // scoreboard/schedule/sweep/fixtures saison) = un seul.
+                seen.add(m.leagueSlug.lowercase() + "/" + m.id) &&
+                    seenFixture.add(
+                        m.leagueSlug.lowercase() + "/" + m.home.id + "/" + m.away.id + "/" + dayKey(m.utcMillis)
+                    )
+            }
             val shown = EspnApi.applySettings(dedup, s)
             val now = System.currentTimeMillis()
             Prefs.saveCache(ctx, shown, now)
@@ -106,8 +114,14 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
         }
     }
 
-    class RefreshReceiver : BroadcastReceiver() {
-        override fun onReceive(ctx: Context, intent: Intent?) {
+    private fun dayKey(millis: Long): String {
+        if (millis <= 0) return "?"
+        val c = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+        c.timeInMillis = millis
+        return "%d-%d".format(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.DAY_OF_YEAR))
+    }
+
+    class RefreshReceiver : BroadcastReceiver() {        override fun onReceive(ctx: Context, intent: Intent?) {
             // Feedback immédiat : bouton ⟳ foncé, restore normal quand le worker finit.
             try {
                 val s = Prefs.load(ctx)
