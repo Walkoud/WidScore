@@ -47,6 +47,8 @@ object Prefs {
         .put("showLeague", s.showLeague)
         .put("fdApiKey", s.fdApiKey)
         .put("useFdApi", s.useFdApi)
+        .put("bzApiKey", s.bzApiKey)
+        .put("useBzApi", s.useBzApi)
 
     fun fromJson(o: JSONObject): FootballSettings {
         val s = FootballSettings()
@@ -85,6 +87,8 @@ object Prefs {
         s.showLeague = o.optBoolean("showLeague", true)
         s.fdApiKey = o.optString("fdApiKey", "")
         s.useFdApi = o.optBoolean("useFdApi", true)
+        s.bzApiKey = o.optString("bzApiKey", "")
+        s.useBzApi = o.optBoolean("useBzApi", true)
         return s
     }
 
@@ -103,7 +107,7 @@ object Prefs {
     fun saveReport(
         ctx: Context, at: Long, report: List<EspnApi.LeagueStatus>, totalMatches: Int,
         hiddenOld: Int, schedules: List<EspnApi.ScheduleStatus>,
-        fd: List<FDOrgApi.FdStatus> = emptyList()
+        fd: List<FDOrgApi.FdStatus> = emptyList(), bz: List<BzApi.BzStatus> = emptyList()
     ) {
         try {
             val o = JSONObject()
@@ -123,6 +127,10 @@ object Prefs {
                     JSONObject().put("code", it.code).put("ok", it.ok)
                         .put("count", it.count).put("note", it.note)
                 }))
+                .put("bz", JSONArray(bz.map {
+                    JSONObject().put("label", it.label).put("ok", it.ok)
+                        .put("count", it.count).put("note", it.note)
+                }))
             ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
                 .putString(KEY_REPORT, o.toString()).apply()
         } catch (_: Exception) {}
@@ -131,7 +139,7 @@ object Prefs {
     data class SyncReport(
         val at: Long, val totalMatches: Int, val hiddenOld: Int,
         val leagues: List<EspnApi.LeagueStatus>, val schedules: List<EspnApi.ScheduleStatus>,
-        val fd: List<FDOrgApi.FdStatus> = emptyList()
+        val fd: List<FDOrgApi.FdStatus> = emptyList(), val bz: List<BzApi.BzStatus> = emptyList()
     )
 
     fun loadReport(ctx: Context): SyncReport? {
@@ -172,7 +180,18 @@ object Prefs {
                     )
                 )
             }
-            SyncReport(o.optLong("at"), o.optInt("totalMatches"), o.optInt("hiddenOld"), list, slist, fdlist)
+            val barr = o.optJSONArray("bz") ?: JSONArray()
+            val bzlist = mutableListOf<BzApi.BzStatus>()
+            for (i in 0 until barr.length()) {
+                val l = barr.getJSONObject(i)
+                bzlist.add(
+                    BzApi.BzStatus(
+                        l.optString("label"), l.optBoolean("ok"),
+                        l.optInt("count"), l.optString("note", "")
+                    )
+                )
+            }
+            SyncReport(o.optLong("at"), o.optInt("totalMatches"), o.optInt("hiddenOld"), list, slist, fdlist, bzlist)
         } catch (_: Exception) { null }
     }
 

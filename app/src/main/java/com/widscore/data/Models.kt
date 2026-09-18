@@ -94,5 +94,8 @@ data class FootballSettings(
     var showLeague: Boolean = true, // ligne ligue dans item classic
     // football-data.org (2e source, clé user).
     var fdApiKey: String = "",
-    var useFdApi: Boolean = true
+    var useFdApi: Boolean = true,
+    // sports.bzzoiro.com (3e source, clé user).
+    var bzApiKey: String = "",
+    var useBzApi: Boolean = true
 )

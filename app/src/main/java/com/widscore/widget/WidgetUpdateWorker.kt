@@ -69,8 +69,40 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 all += fx
                 L.log("FIX", "season fixtures +${fx.size}")
             } catch (_: Exception) {}
-            // football-data.org (clé user, 10/min) : 2e source.
+            // sports.bzzoiro.com (clé user) : 3e source, passé+à venir par équipe.
+            if (s.useBzApi && s.bzApiKey.isNotBlank()) {
+                try {
+                    val bz = com.widscore.data.BzApi
+                    var okTeams = 0
+                    for (t in favTeams) {
+                        val bzTeam = bz.resolveTeam(ctx, s.bzApiKey, t)
+                        if (bzTeam == null) {
+                            bz.record(t.name, false, 0, "not found")
+                            L.log("BZ", "${t.name} team not found")
+                            continue
+                        }
+                        val evs = bz.getTeamEvents(s.bzApiKey, bzTeam.id)
+                        if (evs == null) {
+                            bz.record(t.name, false, 0, "fetch fail")
+                            continue
+                        }
+                        var added = 0
+                        for (ev in evs) {
+                            val lid = ev.optInt("league_id", 0)
+                            val lname = try { bz.leagueName(ctx, s.bzApiKey, lid) } catch (_: Exception) { "League $lid" }
+                            bz.convert(ev, t, lname)?.let { all.add(it); added++ }
+                        }
+                        bz.record(t.name, true, added, "")
+                        L.log("BZ", "${t.name} ok count=$added")
+                        okTeams++
+                    }
+                    L.log("BZ", "teams ok=$okTeams/${favTeams.size}")
+                } catch (e: Exception) {
+                    L.log("BZ", "FAIL ${e.message}")
+                }
+            }
             if (s.useFdApi && s.fdApiKey.isNotBlank()) {
+                // football-data.org (clé user, 10/min) : 2e source.
                 try {
                     val codes = fetch.mapNotNull { com.widscore.data.FDOrgApi.codeFor(it) }.distinct().take(8)
                     L.log("FD", "competitions=$codes")
@@ -105,7 +137,8 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
             }
             Prefs.saveReport(
                 ctx, now, EspnApi.lastReport, shown.size, hiddenOld,
-                EspnApi.lastSchedules, com.widscore.data.FDOrgApi.lastStatuses
+                EspnApi.lastSchedules, com.widscore.data.FDOrgApi.lastStatuses,
+                com.widscore.data.BzApi.lastStatuses
             )
             L.log("SYNC", "fetched=${all.size} shown=${shown.size} hiddenOld=$hiddenOld live=${shown.count { it.isLive }}")
 

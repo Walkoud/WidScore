@@ -121,6 +121,26 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Clé sports.bzzoiro.com.
+        findViewById<EditText>(R.id.bz_key).setText(settings().bzApiKey)
+        findViewById<TextView>(R.id.bz_status).text =
+            if (settings().bzApiKey.isBlank()) "" else "BZ: ${com.widscore.data.BzApi.lastStatuses.size} calls"
+        findViewById<Button>(R.id.btn_bz_save).setOnClickListener {
+            val c = settings()
+            c.bzApiKey = findViewById<EditText>(R.id.bz_key).text.toString().trim()
+            persist(c)
+            Toast.makeText(this, getString(R.string.fd_saved), Toast.LENGTH_SHORT).show()
+            refreshNow()
+        }
+        findViewById<Button>(R.id.btn_bz_test).setOnClickListener {
+            val key = findViewById<EditText>(R.id.bz_key).text.toString().trim()
+            findViewById<TextView>(R.id.bz_status).text = "…"
+            lifecycleScope.launch {
+                val res = withContext(Dispatchers.IO) { com.widscore.data.BzApi.ping(key) }
+                findViewById<TextView>(R.id.bz_status).text = "BZ test: $res"
+            }
+        }
+
         // Logs : lecture + copier tout + effacer.
         renderLogs()
         findViewById<Button>(R.id.btn_log_refresh).setOnClickListener { renderLogs() }
@@ -297,6 +317,10 @@ class MainActivity : AppCompatActivity() {
         for (f in rep.fd) {
             sb.append("\nFD • ${f.code}: ")
             sb.append(if (f.ok) "${f.count}" else "fail ${f.note}")
+        }
+        for (b in rep.bz) {
+            sb.append("\nBZ • ${b.label}: ")
+            sb.append(if (b.ok) "${b.count}" else "fail ${b.note}")
         }
         val failed = rep.leagues.filter { !it.ok }
         if (failed.isNotEmpty()) {
