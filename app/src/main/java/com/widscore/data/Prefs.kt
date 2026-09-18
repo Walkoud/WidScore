@@ -127,6 +127,8 @@ object Prefs {
             }
             SyncReport(o.optLong("at"), o.optInt("totalMatches"), list)
         } catch (_: Exception) { null }
+    }
+
     fun loadCache(ctx: Context): Pair<Long, List<EspnMatch>> {
         return try {
             val raw = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_CACHE, null)
