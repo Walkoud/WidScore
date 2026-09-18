@@ -209,7 +209,7 @@ object RosterStore {
             Normalizer.normalize(it, Normalizer.Form.NFD)
         }
         return Normalizer.normalize(lower, Normalizer.Form.NFC)
-            .filter { Character.getType(it) != Character.NON_SPACING_MARK.value }
+            .filter { Character.getType(it) != Character.NON_SPACING_MARK }
     }
 
     private val frAliases = mapOf(

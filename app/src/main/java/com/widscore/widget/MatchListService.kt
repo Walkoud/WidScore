@@ -8,7 +8,6 @@ import android.util.LruCache
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.widscore.R
-import com.widscore.R
 import com.widscore.data.FootballSettings
 import com.widscore.data.Lang
 import com.widscore.data.Prefs
