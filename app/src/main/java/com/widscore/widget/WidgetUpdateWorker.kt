@@ -24,8 +24,11 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
 
     override suspend fun doWork(): Result {
         val ctx = applicationContext
+        com.widscore.data.LogStore.init(ctx)
         val s = Prefs.load(ctx)
+        val L = com.widscore.data.LogStore
         return try {
+            L.log("SYNC", "start leagues=${s.leagues} favs=${s.teams.map { it.kind + ":" + it.name }}")
             // Copie RefreshAsync Palisades : une équipe suivie amène TOUTES ses ligues
             // (directory monde : ex. Besiktas -> tur.1 + uefa.europa), pas juste sa ligue
             // principale. Sans ça, les matchs européens sont invisibles.
@@ -42,13 +45,18 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 .filter { it.isNotBlank() }.distinct()
             val all = mutableListOf<com.widscore.data.EspnMatch>()
             for (lg in fetch) {
+                val before = all.size
                 all += EspnApi.getMatches(lg)
+                L.log("ESPN", "$lg +${all.size - before}")
                 kotlinx.coroutines.delay(150)
             }
+            L.log("ESPN", "scoreboards total=${all.size}")
             // Backfill schedules par équipe ET par ligue (copie Palisades).
             for (t in favTeams) {
                 for (lg in teamLeagueMap[t.id].orEmpty()) {
+                    val before = all.size
                     all += EspnApi.getTeamSchedule(lg, t.id, t.name)
+                    L.log("SCHED", "${t.name}/$lg +${all.size - before}")
                 }
             }
             // Fixtures saison (core.api team events, cache 24h) : matchs à venir
@@ -57,8 +65,26 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 val triples = favTeams.flatMap { t ->
                     teamLeagueMap[t.id].orEmpty().map { lg -> Triple(lg, t.id, t.name) }
                 }
-                all += com.widscore.data.TeamEventsStore.refresh(ctx, triples)
+                val fx = com.widscore.data.TeamEventsStore.refresh(ctx, triples)
+                all += fx
+                L.log("FIX", "season fixtures +${fx.size}")
             } catch (_: Exception) {}
+            // football-data.org (clé user, 10/min) : 2e source.
+            if (s.useFdApi && s.fdApiKey.isNotBlank()) {
+                try {
+                    val codes = fetch.mapNotNull { com.widscore.data.FDOrgApi.codeFor(it) }.distinct().take(8)
+                    L.log("FD", "competitions=$codes")
+                    for (code in codes) {
+                        val slug = com.widscore.data.FDOrgApi.slugFor(code) ?: continue
+                        val list = com.widscore.data.FDOrgApi.getCompetitionMatches(
+                            s.fdApiKey, code, slug, s.teams
+                        )
+                        if (list != null) all += list
+                    }
+                } catch (e: Exception) {
+                    L.log("FD", "FAIL ${e.message}")
+                }
+            }
             val seen = HashSet<String>()
             val seenFixture = HashSet<String>()
             val dedup = all.filter { m ->
@@ -77,7 +103,11 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
             else dedup.count {
                 it.isFinished && (now - (it.utcMillis + 115 * 60_000L)) > s.finishedHours * 3600_000L
             }
-            Prefs.saveReport(ctx, now, EspnApi.lastReport, shown.size, hiddenOld, EspnApi.lastSchedules)
+            Prefs.saveReport(
+                ctx, now, EspnApi.lastReport, shown.size, hiddenOld,
+                EspnApi.lastSchedules, com.widscore.data.FDOrgApi.lastStatuses
+            )
+            L.log("SYNC", "fetched=${all.size} shown=${shown.size} hiddenOld=$hiddenOld live=${shown.count { it.isLive }}")
 
             val mgr = AppWidgetManager.getInstance(ctx)
             val emptySetup = s.leagues.isEmpty() && s.teams.isEmpty()
@@ -109,7 +139,8 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
             }
             schedulePeriodic(ctx, s.refreshMinutes)
             Result.success()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            com.widscore.data.LogStore.log("SYNC", "FAIL ${e.message}")
             Result.retry()
         }
     }

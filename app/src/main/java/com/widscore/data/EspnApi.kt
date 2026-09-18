@@ -52,6 +52,7 @@ object EspnApi {
         val (body, code) = getWithCode("https://cdn.espn.com/core/soccer/scoreboard?league=${Uri.encode(slug)}&xhr=1")
         if (body == null) {
             recordStatus(slug, false, 0, code == 429)
+            LogStore.log("ESPN", "$slug FAIL http=$code" + if (code == 429) " RATE-LIMITED" else "")
             return emptyList()
         }
         return try {

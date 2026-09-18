@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         Lang.applySaved(this)
         super.onCreate(savedInstanceState)
+        com.widscore.data.LogStore.init(this)
         setContentView(R.layout.activity_main)
 
         leaguesBox = findViewById(R.id.leagues_box)
@@ -99,6 +100,45 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_lang_fr).setOnClickListener { setLang(Lang.FR) }
         findViewById<Button>(R.id.btn_reload_teams).setOnClickListener { reloadTeams() }
         findViewById<Button>(R.id.btn_reload_all).setOnClickListener { reloadTeams() }
+
+        // Clé football-data.org.
+        findViewById<EditText>(R.id.fd_key).setText(settings().fdApiKey)
+        findViewById<TextView>(R.id.fd_status).text =
+            if (settings().fdApiKey.isBlank()) "" else "FD: ${com.widscore.data.FDOrgApi.lastStatuses.size} calls"
+        findViewById<Button>(R.id.btn_fd_save).setOnClickListener {
+            val c = settings()
+            c.fdApiKey = findViewById<EditText>(R.id.fd_key).text.toString().trim()
+            persist(c)
+            Toast.makeText(this, getString(R.string.fd_saved), Toast.LENGTH_SHORT).show()
+            refreshNow()
+        }
+        findViewById<Button>(R.id.btn_fd_test).setOnClickListener {
+            val key = findViewById<EditText>(R.id.fd_key).text.toString().trim()
+            findViewById<TextView>(R.id.fd_status).text = "…"
+            lifecycleScope.launch {
+                val res = withContext(Dispatchers.IO) { com.widscore.data.FDOrgApi.ping(key) }
+                findViewById<TextView>(R.id.fd_status).text = "FD test: $res"
+            }
+        }
+
+        // Logs : lecture + copier tout + effacer.
+        renderLogs()
+        findViewById<Button>(R.id.btn_log_refresh).setOnClickListener { renderLogs() }
+        findViewById<Button>(R.id.btn_log_copy).setOnClickListener {
+            try {
+                val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(
+                    android.content.ClipData.newPlainText(
+                        "WidScore logs", com.widscore.data.LogStore.lines().joinToString("\n")
+                    )
+                )
+                Toast.makeText(this, getString(R.string.log_copied), Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {}
+        }
+        findViewById<Button>(R.id.btn_log_clear).setOnClickListener {
+            com.widscore.data.LogStore.clear(this)
+            renderLogs()
+        }
 
         startWarm()
         renderSync()
@@ -222,6 +262,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun renderLogs() {
+        try {
+            val tv = findViewById<TextView>(R.id.log_view)
+            tv.text = com.widscore.data.LogStore.lines().takeLast(200).joinToString("\n")
+            tv.movementMethod = android.text.method.ScrollingMovementMethod.getInstance()
+        } catch (_: Exception) {}
+    }
+
     // --- Sync status : rate limit ESPN visible ---
     private fun renderSync() {
         val rep = Prefs.loadReport(this)
@@ -245,6 +293,10 @@ class MainActivity : AppCompatActivity() {
             sb.append("\n• ${sch.team}: ")
             sb.append(if (sch.ok) "${sch.count}" + if (sch.source.isNotBlank()) " (${sch.source})" else ""
             else getString(R.string.sync_failed_short))
+        }
+        for (f in rep.fd) {
+            sb.append("\nFD • ${f.code}: ")
+            sb.append(if (f.ok) "${f.count}" else "fail ${f.note}")
         }
         val failed = rep.leagues.filter { !it.ok }
         if (failed.isNotEmpty()) {
@@ -458,5 +510,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         renderSync()
+        renderLogs()
     }
 }

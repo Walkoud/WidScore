@@ -265,7 +265,9 @@ object RosterStore {
                 writeDisk(ctx, root)
             }
             writeDisk(ctx, root)
-        } catch (_: Exception) {
+            LogStore.log("DIR", "warm done: ${loadCached(ctx).size} teams cached")
+        } catch (e: Exception) {
+            LogStore.log("DIR", "warm FAIL ${e.message}")
         } finally {
             running = false
         }

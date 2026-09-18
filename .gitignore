@@ -1,0 +1,5 @@
+# Doc locale, pas dans le repo.
+/football-data.org - API Quickstart.html
+/football-data.org - API Quickstart_files/
+*.log
+.local/

@@ -75,4 +75,13 @@
     <string name="col_white">Blanc</string>
     <string name="col_accent">Bleu accent</string>
     <string name="set_show_league">Afficher ligue (classic)</string>
+    <string name="title_fd">football-data.org (2e source)</string>
+    <string name="fd_key_hint">Clé API (X-Auth-Token)…</string>
+    <string name="fd_save">Sauver clé</string>
+    <string name="fd_test">Tester clé</string>
+    <string name="fd_saved">Clé sauvée</string>
+    <string name="title_logs">Logs</string>
+    <string name="log_copy">Tout copier</string>
+    <string name="log_clear">Effacer</string>
+    <string name="log_copied">Logs copiés</string>
 </resources>

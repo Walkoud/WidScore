@@ -45,6 +45,8 @@ object Prefs {
         .put("blockSize", s.blockSize)
         .put("compact", s.compact)
         .put("showLeague", s.showLeague)
+        .put("fdApiKey", s.fdApiKey)
+        .put("useFdApi", s.useFdApi)
 
     fun fromJson(o: JSONObject): FootballSettings {
         val s = FootballSettings()
@@ -81,6 +83,8 @@ object Prefs {
         s.blockSize = if (bs == "small" || bs == "large") bs else "normal"
         s.compact = o.optBoolean("compact", false)
         s.showLeague = o.optBoolean("showLeague", true)
+        s.fdApiKey = o.optString("fdApiKey", "")
+        s.useFdApi = o.optBoolean("useFdApi", true)
         return s
     }
 
@@ -98,7 +102,8 @@ object Prefs {
     // Rapport synchro (rate limit 429 + backfill + rétention visibles dans l'app).
     fun saveReport(
         ctx: Context, at: Long, report: List<EspnApi.LeagueStatus>, totalMatches: Int,
-        hiddenOld: Int, schedules: List<EspnApi.ScheduleStatus>
+        hiddenOld: Int, schedules: List<EspnApi.ScheduleStatus>,
+        fd: List<FDOrgApi.FdStatus> = emptyList()
     ) {
         try {
             val o = JSONObject()
@@ -114,6 +119,10 @@ object Prefs {
                         .put("league", it.league).put("ok", it.ok).put("count", it.count)
                         .put("source", it.source)
                 }))
+                .put("fd", JSONArray(fd.map {
+                    JSONObject().put("code", it.code).put("ok", it.ok)
+                        .put("count", it.count).put("note", it.note)
+                }))
             ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
                 .putString(KEY_REPORT, o.toString()).apply()
         } catch (_: Exception) {}
@@ -121,7 +130,8 @@ object Prefs {
 
     data class SyncReport(
         val at: Long, val totalMatches: Int, val hiddenOld: Int,
-        val leagues: List<EspnApi.LeagueStatus>, val schedules: List<EspnApi.ScheduleStatus>
+        val leagues: List<EspnApi.LeagueStatus>, val schedules: List<EspnApi.ScheduleStatus>,
+        val fd: List<FDOrgApi.FdStatus> = emptyList()
     )
 
     fun loadReport(ctx: Context): SyncReport? {
@@ -151,7 +161,18 @@ object Prefs {
                     )
                 )
             }
-            SyncReport(o.optLong("at"), o.optInt("totalMatches"), o.optInt("hiddenOld"), list, slist)
+            val farr = o.optJSONArray("fd") ?: JSONArray()
+            val fdlist = mutableListOf<FDOrgApi.FdStatus>()
+            for (i in 0 until farr.length()) {
+                val l = farr.getJSONObject(i)
+                fdlist.add(
+                    FDOrgApi.FdStatus(
+                        l.optString("code"), l.optBoolean("ok"),
+                        l.optInt("count"), l.optString("note", "")
+                    )
+                )
+            }
+            SyncReport(o.optLong("at"), o.optInt("totalMatches"), o.optInt("hiddenOld"), list, slist, fdlist)
         } catch (_: Exception) { null }
     }
 
