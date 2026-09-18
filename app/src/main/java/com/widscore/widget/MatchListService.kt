@@ -106,9 +106,6 @@ class MatchListService : RemoteViewsService() {
                 item
             } catch (_: Exception) { null }
         }
-                }
-            } catch (_: Exception) { null }
-        }
     }
 }
 
