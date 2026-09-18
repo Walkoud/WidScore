@@ -31,9 +31,11 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
             // principale. Sans ça, les matchs européens sont invisibles.
             val dirByTeam = com.widscore.data.RosterStore.loadCached(ctx)
                 .groupBy({ it.id }, { it.leagueSlug.lowercase() })
+            val discovered = com.widscore.data.RosterStore.loadTeamLeagues(ctx)
             val favTeams = s.teams.filter { it.kind == "team" }
             val teamLeagueMap = favTeams.associate { t ->
-                t.id to ((dirByTeam[t.id] ?: emptyList()) + listOf(t.leagueSlug.lowercase()))
+                t.id to ((dirByTeam[t.id] ?: emptyList()) + listOf(t.leagueSlug.lowercase()) +
+                    (discovered[t.id] ?: emptyList()))
                     .map { it.trim() }.filter { it.isNotBlank() }.distinct()
             }
             val fetch = (s.leagues + teamLeagueMap.values.flatten()).map { it.trim() }

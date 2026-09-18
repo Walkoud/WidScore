@@ -141,6 +141,30 @@ class MainActivity : AppCompatActivity() {
             directory = withContext(Dispatchers.IO) { RosterStore.loadCached(this@MainActivity) }
             updateDirStatus(-1, -1)
             renderSearch()
+            // Découverte des compétitions des équipes suivies (TOUS leurs matchs
+            // sans cocher aucune ligue). 1 appel/ligue, cache 30j.
+            val favs = withContext(Dispatchers.IO) {
+                Prefs.load(this@MainActivity).teams.filter { it.kind == "team" }
+            }
+            for (t in favs) {
+                val known = withContext(Dispatchers.IO) {
+                    RosterStore.loadCached(this@MainActivity)
+                        .filter { it.id == t.id }.map { it.leagueSlug } + listOf(t.leagueSlug)
+                }
+                withContext(Dispatchers.IO) {
+                    RosterStore.discoverTeamLeagues(this@MainActivity, t.id, known) { done, total ->
+                        runOnUiThread {
+                            dirProgress.visibility = View.VISIBLE
+                            dirProgress.max = total
+                            dirProgress.progress = done
+                            searchStatus.text = getString(R.string.team_leagues_search, t.name, done, total)
+                        }
+                    }
+                }
+            }
+            dirProgress.visibility = View.GONE
+            searchStatus.text = getString(R.string.directory_ready, directory.size)
+            WidgetUpdateWorker.enqueueOneShot(this@MainActivity)
         }
     }
 
@@ -291,10 +315,10 @@ class MainActivity : AppCompatActivity() {
             })
             added++
         }
-        val teams = if (nq.isEmpty()) directory.sortedBy { it.name }.take(4)
+        val teams = if (nq.isEmpty()) RosterStore.dedup(directory).sortedBy { it.name }.take(4)
         else RosterStore.search(directory, q).take(4)
         for (t in teams) {
-            val label = "⭐ ${t.name}" + if (t.abbr.isNotBlank()) " (${t.abbr})" else ""
+            val label = "⭐ " + RosterStore.displayName(t) + if (t.abbr.isNotBlank()) " (${t.abbr})" else ""
             searchResults.addView(favCheck(label, favIds.contains("team:${t.id}")) { v ->
                 val cur = settings()
                 if (v) {

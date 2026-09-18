@@ -51,6 +51,7 @@
     <string name="btn_reload_teams">Recharger les équipes</string>
     <string name="btn_reload_all">Tout recharger</string>
     <string name="directory_saved">Équipes conservées sur l\'appareil</string>
+    <string name="team_leagues_search">Recherche compétitions %1$s… %2$d/%3$d</string>
     <string name="title_sync">Dernière synchro</string>
     <string name="sync_never">Pas encore synchronisé</string>
     <string name="sync_ok">%1$s — %2$d matchs</string>

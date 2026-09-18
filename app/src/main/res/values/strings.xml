@@ -51,6 +51,7 @@
     <string name="btn_reload_teams">Reload team list</string>
     <string name="btn_reload_all">Reload everything</string>
     <string name="directory_saved">Teams stay saved on device</string>
+    <string name="team_leagues_search">Finding %1$s competitions… %2$d/%3$d</string>
     <string name="title_sync">Last sync</string>
     <string name="sync_never">Not synced yet</string>
     <string name="sync_ok">%1$s — %2$d matches</string>

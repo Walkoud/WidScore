@@ -84,6 +84,7 @@ object RosterStore {
 
     fun clearCache(ctx: Context) {
         try { file(ctx).delete() } catch (_: Exception) {}
+        try { File(ctx.filesDir, TEAM_LEAGUES_FILE).delete() } catch (_: Exception) {}
         done = 0; total = 0
     }
 
@@ -137,7 +138,80 @@ object RosterStore {
         distinct
     }
 
-    // Warm : abonnées d'abord, puis curated, puis reste du monde (borné/session).
+    // Découverte des compétitions d'une équipe suivie : sonde team-events
+    // sur toutes les ligues ESPN connues (1 appel/ligue, existe = joue dedans).
+    // Cache 30j. Garantit TOUS les matchs d'une équipe sans cocher aucune ligue.
+    private const val TEAM_LEAGUES_FILE = "football_team_leagues.json"
+
+    fun loadTeamLeagues(ctx: Context): Map<String, List<String>> {
+        return try {
+            val f = File(ctx.filesDir, TEAM_LEAGUES_FILE)
+            if (!f.exists()) return emptyMap()
+            val root = JSONObject(f.readText())
+            val out = mutableMapOf<String, List<String>>()
+            for (k in root.keys()) {
+                val node = root.optJSONObject(k) ?: continue
+                val at = node.optLong("fetchedAt", 0)
+                if (at <= 0 || (System.currentTimeMillis() - at) >= CACHE_DAYS * 24 * 3600_000L) continue
+                val arr = node.optJSONArray("leagues") ?: JSONArray()
+                out[k] = MutableList(arr.length()) { i -> arr.optString(i) }.filter { it.isNotBlank() }
+            }
+            out
+        } catch (_: Exception) { emptyMap() }
+    }
+
+    private fun saveTeamLeagues(ctx: Context, teamId: String, leagues: List<String>) {
+        try {
+            val f = File(ctx.filesDir, TEAM_LEAGUES_FILE)
+            val root = try {
+                if (f.exists()) JSONObject(f.readText()) else JSONObject()
+            } catch (_: Exception) { JSONObject() }
+            root.put(
+                teamId, JSONObject()
+                    .put("fetchedAt", System.currentTimeMillis())
+                    .put("leagues", JSONArray(leagues))
+            )
+            f.writeText(root.toString())
+        } catch (_: Exception) {}
+    }
+
+    private fun seasonYear(): Int {
+        val cal = java.util.Calendar.getInstance()
+        val y = cal.get(java.util.Calendar.YEAR)
+        return if (cal.get(java.util.Calendar.MONTH) >= java.util.Calendar.JULY) y else y - 1
+    }
+
+    // Sonde priorisée : ligues connues d'abord (rapide), puis reste.
+    suspend fun discoverTeamLeagues(
+        ctx: Context, teamId: String, knownFirst: List<String>,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): List<String> = withContext(Dispatchers.IO) {
+        try {
+            val cached = loadTeamLeagues(ctx)[teamId]
+            if (cached != null) return@withContext cached
+            val all = try { getAllSlugs(ctx) } catch (_: Exception) { emptyList<String>() }
+            val ordered = (knownFirst.map { it.lowercase() } +
+                all.map { it.lowercase() }.filter { !knownFirst.contains(it) }).distinct()
+            val found = mutableListOf<String>()
+            var done = 0
+            for (slug in ordered) {
+                try {
+                    val url = "https://sports.core.api.espn.com/v2/sports/soccer/leagues/" +
+                        android.net.Uri.encode(slug) + "/seasons/" + seasonYear() +
+                        "/teams/" + android.net.Uri.encode(teamId) + "/events?lang=en&region=us&limit=1"
+                    val body = EspnApi.getRaw(url)
+                    if (body != null) {
+                        val items = JSONObject(body).optJSONArray("items")
+                        if (items != null && items.length() > 0) found.add(slug)
+                    }
+                } catch (_: Exception) {}
+                done++
+                onProgress(done, ordered.size)
+            }
+            saveTeamLeagues(ctx, teamId, found)
+            found
+        } catch (_: Exception) { emptyList() }
+    }
     // Copie EnsureWorldRostersAsync (priorités + enum complète).
     suspend fun warm(
         ctx: Context,
@@ -262,11 +336,13 @@ object RosterStore {
 
     // Recherche tolérante : accents/casse/espaces/ponctuation ignorés,
     // chaque mot de la requête doit apparaître (contenu) dans le nom.
+    // Dedup par id comme GetKnownTeams Palisades (1 ligne par équipe).
     fun search(teams: List<RosterTeam>, query: String): List<RosterTeam> {
+        val deduped = dedup(teams)
         val q = norm(query)
-        if (q.isBlank()) return teams.sortedBy { it.name }.take(60)
+        if (q.isBlank()) return deduped.sortedBy { it.name }.take(60)
         val words = q.split(" ").filter { it.length > 1 }
-        return teams.filter { t ->
+        return deduped.filter { t ->
             val n = norm(t.name)
             val flat = n.replace(" ", "")
             val qflat = q.replace(" ", "")
@@ -274,6 +350,29 @@ object RosterStore {
                 (words.isNotEmpty() && words.all { w -> n.contains(w) }) ||
                 matchesAlias(t.name, q)
         }.sortedBy { it.name }.take(60)
+    }
+
+    // Une ligne par équipe (première ligue rencontrée = ligue principale).
+    fun dedup(teams: List<RosterTeam>): List<RosterTeam> {
+        val seen = HashSet<String>()
+        return teams.filter { seen.add(it.id) }
+    }
+
+    // Suffixe Women comme Palisades (équipes femmes homonymes).
+    fun displayName(t: RosterTeam): String {
+        return if (isWomenLeague(t.leagueSlug)) t.name + " - Women" else t.name
+    }
+
+    fun isWomenLeague(slug: String): Boolean {
+        if (slug.isBlank()) return false
+        val s = slug.lowercase()
+        if (s.contains(".w.") || s.endsWith(".w")) return true
+        if (s.contains("nwsl") || s.contains("shebelieves") || s.contains("femenina") ||
+            s.contains("womens") || s.contains("ww")
+        ) return true
+        if (s.startsWith("fifa.w.") || s.startsWith("uefa.w") || s.startsWith("concacaf.w")) return true
+        if (s.contains("weuro") || s.contains("wchampions") || s.contains("w.nations")) return true
+        return false
     }
 
     // "Türkiye" -> "turkiye", "St. Pauli" -> "st pauli".
