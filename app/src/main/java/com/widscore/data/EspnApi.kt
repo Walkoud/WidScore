@@ -1,8 +1,10 @@
 package com.widscore.data
 
+import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -56,24 +58,7 @@ object EspnApi {
             return emptyList()
         }
         return try {
-            val list = parseScoreboard(body, slug).toMutableList()
-            // Port Palisades dd5d542 : le CDN est une fenêtre courante étroite
-            // et ignore dates= -> les à-venir n'apparaissent jamais. site.web.api
-            // honore ?dates=YYYYMMDD (non bloqué Akamai) -> on merge J/J+1/J+2
-            // locaux (le widget affiche des jours locaux) par-dessus la base CDN.
-            try {
-                val seen = list.map { it.id }.toHashSet()
-                val sdf = SimpleDateFormat("yyyyMMdd", Locale.US)
-                val cal = java.util.Calendar.getInstance()
-                for (off in 0..2) {
-                    cal.timeInMillis = System.currentTimeMillis()
-                    cal.add(java.util.Calendar.DAY_OF_YEAR, off)
-                    val day = sdf.format(cal.time)
-                    for (extra in getWebApiDay(slug, day)) {
-                        if (seen.add(extra.id)) list.add(extra)
-                    }
-                }
-            } catch (_: Exception) {}
+            val list = parseScoreboard(body, slug)
             recordStatus(slug, true, list.size, false)
             list
         } catch (_: Exception) {
@@ -120,24 +105,41 @@ object EspnApi {
         return try { parseSchedule(body, leagueSlug) } catch (_: Exception) { null }
     }
 
-    // Scoreboard du jour via site.web.api (honore ?dates=YYYYMMDD, non bloqué
-    // Akamai). Vide en cas d'échec : ne casse jamais la base CDN.
-    // Port Palisades dd5d542 (GetWebApiDayAsync/ParseWebApiScoreboard).
-    private suspend fun getWebApiDay(slug: String, yyyymmdd: String): List<EspnMatch> {
+    // Clés mois local M/M+1/M+2 au format YYYYMM (port Palisades fec1685 :
+    // le widget affiche des jours locaux, et les fixtures restent visibles
+    // ~3 mois). Le CDN reste premier : le frais gagne toujours au dedup.
+    fun monthKeys(): List<String> {
+        return try {
+            val sdf = SimpleDateFormat("yyyyMM", Locale.US)
+            val cal = java.util.Calendar.getInstance()
+            (0..2).map { off ->
+                cal.timeInMillis = System.currentTimeMillis()
+                cal.add(java.util.Calendar.MONTH, off)
+                sdf.format(cal.time)
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // Scoreboard mensuel via site.web.api (?dates=YYYYMM, non bloqué Akamai).
+    // Retourne null en cas d'échec (le cache disque périmé prend le relais).
+    // Port Palisades fec1685 (GetWebApiMonthAsync/ParseWebApiScoreboard).
+    suspend fun getWebApiMonth(leagueSlug: String, yyyymm: String): List<EspnMatch>? {
         return try {
             val (body, _) = getWithCode(
                 "https://site.web.api.espn.com/apis/site/v2/sports/soccer/" +
-                    Uri.encode(slug.trim()) + "/scoreboard?dates=" + yyyymmdd
+                    Uri.encode(leagueSlug.trim()) + "/scoreboard?dates=" + yyyymm
             )
-            if (body == null) return emptyList()
-            parseSchedule(body, slug).onEach {
-                if (it.state == "pre") {
-                    // web.api envoie des scores factices "0" pour les non-joués.
-                    it.homeScore = null
-                    it.awayScore = null
+            if (body == null) return null
+            try {
+                parseSchedule(body, leagueSlug).onEach {
+                    if (it.state == "pre") {
+                        // web.api envoie des scores factices "0" pour les non-joués.
+                        it.homeScore = null
+                        it.awayScore = null
+                    }
                 }
-            }
-        } catch (_: Exception) { emptyList() }
+            } catch (_: Exception) { null }
+        } catch (_: Exception) { null }
     }
 
     // Balaye les 6 derniers jours du scoreboard CDN pour une équipe
@@ -355,5 +357,73 @@ object EspnApi {
         return try {
             java.time.OffsetDateTime.parse(s).toInstant().toEpochMilli()
         } catch (_: Exception) { 0L }
+    }
+}
+
+// Cache disque des payloads réseau lents (mois 12h, schedules 30min).
+// Adaptation Android des caches mémoire Palisades (monthCache 12h, schedCache
+// 30min) : le process du worker meurt entre les runs, la mémoire ne suffit pas.
+// Fichier unique : {key: {fetchedAt, matches[]}}. Anti-empoisonnement : on ne
+// stocke que les succès (vide OK) ; en cas d'échec réseau le périmé prend
+// le relais au lieu de spammer l'API en boucle.
+object NetCache {
+    private const val FILE = "football_netcache.json"
+    private const val MAX_NODES = 200
+
+    // Nœud frais ou null (absent/périmé/erreur).
+    @Synchronized
+    fun get(ctx: Context, key: String, ttlMs: Long): List<EspnMatch>? {
+        return try {
+            val f = java.io.File(ctx.filesDir, FILE)
+            if (!f.exists()) return null
+            val node = JSONObject(f.readText()).optJSONObject(key) ?: return null
+            val at = node.optLong("fetchedAt", 0)
+            if (at <= 0 || System.currentTimeMillis() - at >= ttlMs) return null
+            readMatches(node)
+        } catch (_: Exception) { null }
+    }
+
+    // Repli offline : le périmé vaut mieux que rien quand le réseau échoue.
+    @Synchronized
+    fun getStale(ctx: Context, key: String): List<EspnMatch> {
+        return try {
+            val f = java.io.File(ctx.filesDir, FILE)
+            if (!f.exists()) return emptyList()
+            val node = JSONObject(f.readText()).optJSONObject(key) ?: return emptyList()
+            readMatches(node)
+        } catch (_: Exception) { emptyList() }
+    }
+
+    @Synchronized
+    fun put(ctx: Context, key: String, matches: List<EspnMatch>) {
+        try {
+            val f = java.io.File(ctx.filesDir, FILE)
+            val root = try {
+                if (f.exists()) JSONObject(f.readText()) else JSONObject()
+            } catch (_: Exception) { JSONObject() }
+            root.put(
+                key, JSONObject()
+                    .put("fetchedAt", System.currentTimeMillis())
+                    .put("matches", JSONArray(matches.map { it.toJson() }))
+            )
+            // Borne anti-gonflement : vire les nœuds les plus vieux.
+            val keys = root.keys().asSequence().toList()
+            if (keys.size > MAX_NODES) {
+                val sorted = keys.sortedBy { root.optJSONObject(it)?.optLong("fetchedAt", 0) ?: 0 }
+                for (k in sorted.take(keys.size - MAX_NODES)) root.remove(k)
+            }
+            f.writeText(root.toString())
+        } catch (_: Exception) {}
+    }
+
+    private fun readMatches(node: JSONObject): List<EspnMatch> {
+        val arr = node.optJSONArray("matches") ?: return emptyList()
+        val out = mutableListOf<EspnMatch>()
+        for (i in 0 until arr.length()) {
+            try {
+                EspnMatch.fromJson(arr.optJSONObject(i) ?: continue)?.let { out.add(it) }
+            } catch (_: Exception) {}
+        }
+        return out
     }
 }

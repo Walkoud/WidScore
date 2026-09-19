@@ -23,6 +23,21 @@ import java.util.concurrent.TimeUnit
 class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
+        running = true
+        try {
+            return doSync()
+        } finally {
+            running = false
+            // Rattrapage unique : les demandes arrivées pendant le run
+            // relancent UN seul run avec les derniers réglages.
+            if (again) {
+                again = false
+                try { enqueueOneShot(applicationContext) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private suspend fun doSync(): Result {
         val ctx = applicationContext
         com.widscore.data.LogStore.init(ctx)
         val s = Prefs.load(ctx)
@@ -54,11 +69,42 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                     kotlinx.coroutines.delay(150)
                 }
                 L.log("ESPN", "scoreboards total=${all.size}")
-                // Backfill schedules par équipe ET par ligue (copie Palisades).
+                // Mois M/M+1/M+2 via site.web.api (cache disque 12h, port Palisades
+                // fec1685) : les à-venir restent visibles ~3 mois sans spammer
+                // l'API. Le CDN reste premier : scores frais gagnent au dedup.
+                for (lg in fetch) {
+                    val before = all.size
+                    for (ym in EspnApi.monthKeys()) {
+                        val key = "m:" + lg.lowercase() + "/" + ym
+                        val hit = com.widscore.data.NetCache.get(ctx, key, 12 * 3600_000L)
+                        if (hit != null) { all += hit; continue }
+                        val fresh = EspnApi.getWebApiMonth(lg, ym)
+                        if (fresh != null) {
+                            com.widscore.data.NetCache.put(ctx, key, fresh)
+                            all += fresh
+                        } else {
+                            all += com.widscore.data.NetCache.getStale(ctx, key)
+                        }
+                    }
+                    L.log("MONTH", "$lg +${all.size - before}")
+                }
+                // Backfill schedules par équipe ET par ligue (cache disque 30min,
+                // comme Palisades _schedCache : les terminés bougent peu ; en cas
+                // d'échec on ne stocke rien et le périmé prend le relais).
                 for (t in favTeams) {
                     for (lg in teamLeagueMap[t.id].orEmpty()) {
                         val before = all.size
-                        all += EspnApi.getTeamSchedule(lg, t.id, t.name)
+                        val key = "s:" + lg.lowercase() + "/" + t.id
+                        val hit = com.widscore.data.NetCache.get(ctx, key, 30 * 60_000L)
+                        if (hit != null) {
+                            all += hit
+                        } else {
+                            val sched = EspnApi.getTeamSchedule(lg, t.id, t.name)
+                            val ok = EspnApi.lastSchedules.firstOrNull { it.teamId == t.id }?.ok == true
+                            if (ok) com.widscore.data.NetCache.put(ctx, key, sched)
+                            else all += com.widscore.data.NetCache.getStale(ctx, key)
+                            all += sched
+                        }
                         L.log("SCHED", "${t.name}/$lg +${all.size - before}")
                     }
                 }
@@ -257,6 +303,7 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
                 }
             }
             schedulePeriodic(ctx, s.refreshMinutes)
+            lastSuccessAt = System.currentTimeMillis()
             Result.success()
         } catch (e: Exception) {
             com.widscore.data.LogStore.log("SYNC", "FAIL ${e.message}")
@@ -358,13 +405,34 @@ class WidgetUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
     companion object {
         private const val ONE = "widscore-refresh-once"
         private const val PERIODIC = "widscore-refresh-periodic"
-        fun enqueueOneShot(ctx: Context) {
-            // APPEND : les runs se sérialisent au lieu de s'annuler (les tails
-            // FD/BZ longs mouraient avec "Job was cancelled" sous REPLACE).
-            WorkManager.getInstance(ctx).enqueueUniqueWork(
-                ONE, ExistingWorkPolicy.APPEND,
-                OneTimeWorkRequestBuilder<WidgetUpdateWorker>().build()
-            )
+
+        // Single-flight (port Palisades _refreshing/_refreshAgain) : un seul
+        // run réseau à la fois. Les demandes pendant un run sont fusionnées en
+        // UN rattrapage (fini la file APPEND qui spammait l'API et se faisait
+        // canceller). background=true : déclencheurs passifs (onUpdate des
+        // launchers...) qui respectent la cadence au lieu de relancer.
+        @Volatile var running = false
+        @Volatile private var again = false
+        @Volatile var lastSuccessAt = 0L
+
+        fun enqueueOneShot(ctx: Context, background: Boolean = false) {
+            if (background) {
+                val mins = try {
+                    Prefs.load(ctx).refreshMinutes.coerceIn(1, 60)
+                } catch (_: Exception) { 10 }
+                if (lastSuccessAt > 0 &&
+                    System.currentTimeMillis() - lastSuccessAt < mins * 60_000L
+                ) return
+            }
+            synchronized(this) {
+                if (running) { again = true; return }
+            }
+            try {
+                WorkManager.getInstance(ctx).enqueueUniqueWork(
+                    ONE, ExistingWorkPolicy.KEEP,
+                    OneTimeWorkRequestBuilder<WidgetUpdateWorker>().build()
+                )
+            } catch (_: Exception) {}
         }
         fun schedulePeriodic(ctx: Context, minutes: Int) {
             val every = 15L // mini WorkManager ; refresh <15 via one-shot (clic/appli)

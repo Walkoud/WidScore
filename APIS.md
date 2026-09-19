@@ -129,7 +129,10 @@ GET /api/v2/events/live/?limit=200                               # live du momen
 ## 4. Pipeline app (ordre = priorité dedup)
 
 1. Scoreboards ESPN (ligues abonnées + toutes ligues des suivis : directory + legacy + discovery team-events).
-2. Schedules ESPN par équipe×ligue (+ fallback site.api, puis sweep CDN 6j).
+   + mois M/M+1/M+2 via site.web.api `?dates=YYYYMM` (cache disque 12h, repli périmé offline).
+2. Schedules ESPN par équipe×ligue (+ fallback site.api, puis sweep CDN 6j ; cache disque 30min).
+   Runs single-flight + rattrapage unique (plus de file d'attente) ; réglages
+   cosmétiques = re-rendu sans réseau ; onUpdate launchers respecte la cadence.
 3. Fixtures saison core.api par équipe×ligue (cache 24h).
 4. football-data.org (si clé, ≤8 compétitions, 6,1s/appel).
 5. bzzoiro (si token, par équipe suivie).

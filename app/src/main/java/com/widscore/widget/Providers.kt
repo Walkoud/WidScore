@@ -20,7 +20,8 @@ abstract class BaseScoreProvider : AppWidgetProvider() {
         for (id in ids) {
             bindAdapter(ctx, mgr, id)
         }
-        WidgetUpdateWorker.enqueueOneShot(ctx)
+        // Passif (reboot, launcher...) : respecte la cadence, pas de spam.
+        WidgetUpdateWorker.enqueueOneShot(ctx, background = true)
     }
 
     override fun onReceive(ctx: Context, intent: Intent) {

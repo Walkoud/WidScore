@@ -108,9 +108,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_fd_save).setOnClickListener {
             val c = settings()
             c.fdApiKey = findViewById<EditText>(R.id.fd_key).text.toString().trim()
-            persist(c)
+            persist(c) // enfile déjà un refresh, pas de double appel
             Toast.makeText(this, getString(R.string.fd_saved), Toast.LENGTH_SHORT).show()
-            refreshNow()
         }
         findViewById<Button>(R.id.btn_fd_test).setOnClickListener {
             val key = findViewById<EditText>(R.id.fd_key).text.toString().trim()
@@ -128,9 +127,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_bz_save).setOnClickListener {
             val c = settings()
             c.bzApiKey = findViewById<EditText>(R.id.bz_key).text.toString().trim()
-            persist(c)
+            persist(c) // enfile déjà un refresh, pas de double appel
             Toast.makeText(this, getString(R.string.fd_saved), Toast.LENGTH_SHORT).show()
-            refreshNow()
         }
         findViewById<Button>(R.id.btn_bz_test).setOnClickListener {
             val key = findViewById<EditText>(R.id.bz_key).text.toString().trim()
@@ -258,6 +256,7 @@ class MainActivity : AppCompatActivity() {
     private fun setLang(lang: String) {
         if (Prefs.load(this).lang == lang) return
         Lang.set(this, lang)
+        try { BaseScoreProvider.notifyDataChanged(this) } catch (_: Exception) {}
         recreate()
     }
 
@@ -345,6 +344,13 @@ class MainActivity : AppCompatActivity() {
             if (Prefs.pruneDisabledSources(this, s)) BaseScoreProvider.notifyDataChanged(this)
         } catch (_: Exception) {}
         WidgetUpdateWorker.enqueueOneShot(this)
+    }
+
+    // Pure cosmétique (taille, couleurs, position...) : re-rendu immédiat des
+    // widgets, ZÉRO appel réseau. Les données/filtres passent par persist().
+    private fun persistView(s: FootballSettings) {
+        Prefs.save(this, s)
+        try { BaseScoreProvider.notifyDataChanged(this) } catch (_: Exception) {}
     }
 
     private fun buildAll() {
@@ -456,55 +462,60 @@ class MainActivity : AppCompatActivity() {
     // --- Réglages perso ---
     private fun buildSpinners() {
         val s = settings()
-        bindIntSpinner(R.id.sp_refresh, listOf(1, 5, 10, 15, 30, 60), s.refreshMinutes) { c, v -> c.refreshMinutes = v }
+        // Données/filtres -> persist() (réseau). Cosmétique -> persistView()
+        // (re-rendu seul, zéro appel API).
+        bindIntSpinner(R.id.sp_refresh, listOf(1, 5, 10, 15, 30, 60), s.refreshMinutes, viewOnly = true) { c, v -> c.refreshMinutes = v }
         bindIntSpinner(R.id.sp_max, listOf(4, 6, 8, 10, 12, 20, 30), s.maxMatches) { c, v -> c.maxMatches = v }
         bindIntSpinner(R.id.sp_finished_hours, listOf(0, 6, 12, 24, 48, 168, 336, 720), s.finishedHours) { c, v -> c.finishedHours = v }
 
         val scaleLabels = listOf("70%", "85%", "100%", "115%", "130%")
         val scaleVals = listOf(0.7f, 0.85f, 1.0f, 1.15f, 1.3f)
         val scaleIdx = scaleVals.indexOfFirst { it == s.widgetScale }.takeIf { it >= 0 } ?: 2
-        bindStrSpinner(R.id.sp_scale, scaleLabels, scaleIdx) { c, p -> c.widgetScale = scaleVals[p] }
+        bindStrSpinner(R.id.sp_scale, scaleLabels, scaleIdx, viewOnly = true) { c, p -> c.widgetScale = scaleVals[p] }
 
         val blockLabels = listOf(getString(R.string.block_small), getString(R.string.block_normal), getString(R.string.block_large))
         val blockVals = listOf("small", "normal", "large")
-        bindStrSpinner(R.id.sp_block, blockLabels, blockVals.indexOf(s.blockSize).takeIf { it >= 0 } ?: 1) { c, p ->
+        bindStrSpinner(R.id.sp_block, blockLabels, blockVals.indexOf(s.blockSize).takeIf { it >= 0 } ?: 1, viewOnly = true) { c, p ->
             c.blockSize = blockVals[p]
         }
 
         val fmtLabels = listOf(getString(R.string.fmt_text), getString(R.string.fmt_numeric), getString(R.string.fmt_daynumeric))
         val fmtVals = listOf("text", "numeric", "daynumeric")
-        bindStrSpinner(R.id.sp_datefmt, fmtLabels, fmtVals.indexOf(s.dateFormat).takeIf { it >= 0 } ?: 2) { c, p ->
+        bindStrSpinner(R.id.sp_datefmt, fmtLabels, fmtVals.indexOf(s.dateFormat).takeIf { it >= 0 } ?: 2, viewOnly = true) { c, p ->
             c.dateFormat = fmtVals[p]
         }
 
         val colLabels = listOf(getString(R.string.col_gray), getString(R.string.col_white), getString(R.string.col_accent))
         val colVals = listOf("#808080", "#FFFFFF", "#7DD3FC")
         val curCol = if (s.finishedTextColor.isBlank()) "#808080" else s.finishedTextColor.uppercase()
-        bindStrSpinner(R.id.sp_fincolor, colLabels, colVals.indexOf(curCol).takeIf { it >= 0 } ?: 0) { c, p ->
+        bindStrSpinner(R.id.sp_fincolor, colLabels, colVals.indexOf(curCol).takeIf { it >= 0 } ?: 0, viewOnly = true) { c, p ->
             c.finishedTextColor = colVals[p]
         }
 
         val posLabels = listOf(getString(R.string.pos_top), getString(R.string.pos_bottom))
-        bindStrSpinner(R.id.sp_finished_pos, posLabels, if (s.finishedPosition == "top") 0 else 1) { c, p ->
+        bindStrSpinner(R.id.sp_finished_pos, posLabels, if (s.finishedPosition == "top") 0 else 1, viewOnly = true) { c, p ->
             c.finishedPosition = if (p == 0) "top" else "bottom"
         }
         val clickLabels = listOf(getString(R.string.click_details), getString(R.string.click_google))
-        bindStrSpinner(R.id.sp_click, clickLabels, if (s.matchClickAction == "google") 1 else 0) { c, p ->
+        bindStrSpinner(R.id.sp_click, clickLabels, if (s.matchClickAction == "google") 1 else 0, viewOnly = true) { c, p ->
             c.matchClickAction = if (p == 1) "google" else "details"
         }
-        bindCheck(R.id.cb_crests, s.showCrests) { c, v -> c.showCrests = v }
+        bindCheck(R.id.cb_crests, s.showCrests, viewOnly = true) { c, v -> c.showCrests = v }
         bindCheck(R.id.cb_src_espn, s.useEspn) { c, v -> c.useEspn = v }
         bindCheck(R.id.cb_src_fd, s.useFdApi) { c, v -> c.useFdApi = v }
         bindCheck(R.id.cb_src_bz, s.useBzApi) { c, v -> c.useBzApi = v }
-        bindCheck(R.id.cb_finished_header, s.showFinishedHeader) { c, v -> c.showFinishedHeader = v }
-        bindCheck(R.id.cb_compact, s.compact) { c, v -> c.compact = v }
-        bindCheck(R.id.cb_show_league, s.showLeague) { c, v -> c.showLeague = v }
+        bindCheck(R.id.cb_finished_header, s.showFinishedHeader, viewOnly = true) { c, v -> c.showFinishedHeader = v }
+        bindCheck(R.id.cb_compact, s.compact, viewOnly = true) { c, v -> c.compact = v }
+        bindCheck(R.id.cb_show_league, s.showLeague, viewOnly = true) { c, v -> c.showLeague = v }
     }
 
-    private fun bindCheck(id: Int, current: Boolean, apply: (FootballSettings, Boolean) -> Unit) {
+    private fun bindCheck(id: Int, current: Boolean, viewOnly: Boolean = false, apply: (FootballSettings, Boolean) -> Unit) {
         findViewById<CheckBox>(id).apply {
             setOnCheckedChangeListener(null); isChecked = current
-            setOnCheckedChangeListener { _, v -> val c = settings(); apply(c, v); persist(c) }
+            setOnCheckedChangeListener { _, v ->
+                val c = settings(); apply(c, v)
+                if (viewOnly) persistView(c) else persist(c)
+            }
         }
     }
 
@@ -514,23 +525,25 @@ class MainActivity : AppCompatActivity() {
         return a
     }
 
-    private fun bindIntSpinner(id: Int, options: List<Int>, current: Int, apply: (FootballSettings, Int) -> Unit) {
+    private fun bindIntSpinner(id: Int, options: List<Int>, current: Int, viewOnly: Boolean = false, apply: (FootballSettings, Int) -> Unit) {
         val sp = findViewById<Spinner>(id)
         sp.adapter = spinnerAdapter(options.map { it.toString() })
         sp.onItemSelectedListener = null
         sp.setSelection(maxOf(0, options.indexOf(current)))
         sp.onItemSelectedListener = guardListener {
-            val c = settings(); apply(c, options[sp.selectedItemPosition]); persist(c)
+            val c = settings(); apply(c, options[sp.selectedItemPosition])
+            if (viewOnly) persistView(c) else persist(c)
         }
     }
 
-    private fun bindStrSpinner(id: Int, options: List<String>, current: Int, apply: (FootballSettings, Int) -> Unit) {
+    private fun bindStrSpinner(id: Int, options: List<String>, current: Int, viewOnly: Boolean = false, apply: (FootballSettings, Int) -> Unit) {
         val sp = findViewById<Spinner>(id)
         sp.adapter = spinnerAdapter(options)
         sp.onItemSelectedListener = null
         sp.setSelection(current)
         sp.onItemSelectedListener = guardListener {
-            val c = settings(); apply(c, sp.selectedItemPosition); persist(c)
+            val c = settings(); apply(c, sp.selectedItemPosition)
+            if (viewOnly) persistView(c) else persist(c)
         }
     }
 
