@@ -5,4 +5,5 @@
     <color name="wid_text">#F0F0F0</color>
     <color name="wid_dim">#8A8E96</color>
     <color name="wid_card">#18191C</color>
+    <color name="ic_launcher_background">#000000</color>
 </resources>

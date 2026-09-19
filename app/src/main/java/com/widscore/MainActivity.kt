@@ -473,9 +473,9 @@ class MainActivity : AppCompatActivity() {
         val scaleIdx = scaleVals.indexOfFirst { it == s.widgetScale }.takeIf { it >= 0 } ?: 2
         bindStrSpinner(R.id.sp_scale, scaleLabels, scaleIdx, viewOnly = true) { c, p -> c.widgetScale = scaleVals[p] }
 
-        val blockLabels = listOf(getString(R.string.block_small), getString(R.string.block_normal), getString(R.string.block_large))
-        val blockVals = listOf("small", "normal", "large")
-        bindStrSpinner(R.id.sp_block, blockLabels, blockVals.indexOf(s.blockSize).takeIf { it >= 0 } ?: 1, viewOnly = true) { c, p ->
+        val blockLabels = listOf(getString(R.string.block_xsmall), getString(R.string.block_small), getString(R.string.block_normal), getString(R.string.block_large))
+        val blockVals = listOf("xsmall", "small", "normal", "large")
+        bindStrSpinner(R.id.sp_block, blockLabels, blockVals.indexOf(s.blockSize).takeIf { it >= 0 } ?: 2, viewOnly = true) { c, p ->
             c.blockSize = blockVals[p]
         }
 

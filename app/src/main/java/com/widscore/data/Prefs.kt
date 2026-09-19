@@ -83,7 +83,7 @@ object Prefs {
         s.lang = if (o.optString("lang") == "fr") "fr" else "en"
         s.widgetScale = o.optDouble("widgetScale", 1.0).toFloat().coerceIn(0.7f, 1.3f)
         val bs = o.optString("blockSize", "normal")
-        s.blockSize = if (bs == "small" || bs == "large") bs else "normal"
+        s.blockSize = if (bs == "xsmall" || bs == "small" || bs == "large") bs else "normal"
         s.compact = o.optBoolean("compact", false)
         s.showLeague = o.optBoolean("showLeague", true)
         s.fdApiKey = o.optString("fdApiKey", "")

@@ -179,12 +179,14 @@ object WidgetRenderer {
     // Item dark spec : layout selon block size (S 52dp / M 64dp / L 78dp) + scale textes.
     fun buildDarkItem(ctx: Context, m: EspnMatch, s: FootballSettings, dateLabel: String = ""): RemoteViews {
         val layout = when (s.blockSize) {
+            "xsmall" -> R.layout.widget_item_dark_s
             "small" -> R.layout.widget_item_dark_s
             "large" -> R.layout.widget_item_dark_l
             else -> R.layout.widget_item_dark
         }
         // Tailles de base par variante (× widgetScale).
         val (baseCode, baseMain, baseSub) = when (s.blockSize) {
+            "xsmall" -> Triple(9f, 11f, 7f)
             "small" -> Triple(10f, 12f, 8f)
             "large" -> Triple(12f, 16f, 9f)
             else -> Triple(11f, 14f, 8f)
@@ -228,8 +230,8 @@ object WidgetRenderer {
     // Perso widgets : scale textes (70-130%), compact (masque ligue + sous-titres),
     // showLeague (ligne ligue classic).
     fun applyItemScale(item: RemoteViews, m: EspnMatch, s: FootballSettings, dark: Boolean) {
-        // Facteur bloc (S 0.9 / L 1.1) combiné au scale textes.
-        val block = when (s.blockSize) { "small" -> 0.9f; "large" -> 1.1f; else -> 1.0f }
+        // Facteur bloc (XS 0.8 / S 0.9 / L 1.1) combiné au scale textes.
+        val block = when (s.blockSize) { "xsmall" -> 0.8f; "small" -> 0.9f; "large" -> 1.1f; else -> 1.0f }
         val k = (s.widgetScale.coerceIn(0.7f, 1.3f) * block).coerceIn(0.6f, 1.4f)
         if (dark) {
             if (s.compact && !m.isLive) item.setViewVisibility(R.id.center_sub, View.GONE)
