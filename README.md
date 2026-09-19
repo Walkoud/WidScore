@@ -1,55 +1,61 @@
 # WidScore
 
+*En français ? Voir [README.fr.md](README.fr.md).*
+
 <img src="doc/medias/header_image_logo.jpg" alt="WidScore" width="600">
 
-Scores foot sur l'écran d'accueil : 2 widgets (Classic + Dark), live, à venir, terminés récents. Sans compte, sans pub.
+Live football scores on your home screen: 2 widgets (Classic + Dark), live, upcoming, recent finished. No account, no ads.
 
-![Classic et Dark](doc/medias/two_widgets_preview.png)
+## Why?
 
-## Installation
+The new SofaScore widget is ugly, bloated and inflexible — forced size, forced content, my teams buried in noise. So I built my own: only my teams, my layout, my sizes. Nothing else.
 
-1. Va sur la page [**Releases**](https://github.com/Walkoud/WidScore/releases), télécharge le dernier `WidScore-vX.Y.Z.apk`.
-2. Ouvre le fichier sur ton téléphone, autorise l'installation, installe.
-3. Ajoute le widget : appui long sur l'écran d'accueil → **Widgets** → **WidScore** (Classic ou Dark).
+![Classic and Dark](doc/medias/two_widgets_preview.png)
 
-## Démarrage en 3 étapes
+## Install
 
-1. **Ouvre l'app** → onglet Teams, cherche tes équipes (ex. `Galatasaray`, `Real Madrid`) et coche-les en favoris.
-2. **Pas besoin de cocher les ligues** : une équipe suivie amène automatiquement toutes ses compétitions (championnat + coupes d'Europe...).
-3. **Tape ⟳ une seule fois et attends ~1 minute** : le premier chargement va chercher les calendriers, les suivants sont quasi instantanés (cache).
+1. Go to the [**Releases**](https://github.com/Walkoud/WidScore/releases) page, download the latest `WidScore-vX.Y.Z.apk`.
+2. Open the file on your phone, allow installs, install it.
+3. Add the widget: long-press the home screen → **Widgets** → **WidScore** (Classic or Dark).
 
-## Les sources : laquelle activer ?
+## Get started in 3 steps
 
-| Source | Clé ? | Couverture | À savoir |
+1. **Open the app** → Teams tab, search your teams (e.g. `Galatasaray`, `Real Madrid`) and star them as favorites.
+2. **No need to subscribe to leagues**: a followed team automatically brings all its competitions (league + European cups...).
+3. **Tap ⟳ once and wait ~1 minute**: the first load fetches the calendars, later ones are near-instant (cached).
+
+## Sources: which one to enable?
+
+| Source | Key? | Coverage | Notes |
 |---|---|---|---|
-| **ESPN** | Non, marche direct | Live + 3 mois d'à-venir + terminés | Suffit dans 90 % des cas |
-| **football-data.org** | Oui, gratuite ([inscription](https://www.football-data.org/client/register)) | Saison complète des top ligues | 10 appels/min, **pas de Süper Lig** |
-| **bzzoiro** | Oui ([inscription](https://sports.bzzoiro.com/)) | 88 ligues, passé + futur par équipe, **Süper Lig incluse** | Complément idéal d'ESPN |
+| **ESPN** | No, works out of the box | Live + 3 months upcoming + finished | Enough in 90% of cases |
+| **football-data.org** | Yes, free ([sign up](https://www.football-data.org/client/register)) | Full season of top leagues | 10 calls/min, **no Süper Lig** |
+| **bzzoiro** | Yes ([sign up](https://sports.bzzoiro.com/)) | 88 leagues, past + future per team, **incl. Süper Lig** | Best ESPN companion |
 
-Colle ta clé dans l'app (Settings), sauvegarde : les matchs arrivent au refresh suivant.
+Paste your key in the app (Settings), save: matches arrive on the next refresh.
 
-## À faire / à ne pas faire
+## Do / don't
 
-**À faire :**
-- Suivre des **équipes** plutôt que des ligues (plus précis, moins d'appels).
-- Après un changement de favoris ou de clé : **un seul** appui sur ⟳, puis laisser finir.
-- Les réglages d'apparence (taille, couleurs, position, mode compact) s'appliquent **instantanément**, sans recharger.
-- Couper une source dont tu ne te sers plus : ses matchs disparaissent du widget aussitôt.
+**Do:**
+- Follow **teams** rather than leagues (more precise, fewer API calls).
+- After changing favorites or keys: **one single** tap on ⟳, then let it finish.
+- Appearance settings (size, colors, position, compact mode) apply **instantly**, no reload.
+- Turn off a source you don't use: its matches leave the widget right away.
 
-**À ne pas faire :**
-- **Ne pas spammer le bouton ⟳** : les demandes sont fusionnées, mais chaque run complet prend 1 à 2 minutes. Taper 5 fois = attendre plus longtemps, pas moins.
-- Ne pas vider le cache / réinstaller pour "forcer" : ça détruit les calendriers en cache (12 h pour les mois, 30 min pour les terminés) et tout est retéléchargé.
-- Ne pas chercher un match d'il y a 3 jours : la rétention des terminés est réglable ("Keep finished"), à 0 les terminés sont masqués.
-- Pas de panique si `FAIL http=-1` dans les logs : c'est le réseau du téléphone qui a flanché, l'app réessaie avec l'ancien cache en attendant.
+**Don't:**
+- **Don't spam the ⟳ button**: requests are merged, but a full run takes 1–2 minutes. Tapping 5 times = waiting longer, not shorter.
+- Don't wipe cache / reinstall to "force" things: it destroys cached calendars (12 h for months, 30 min for finished) and everything gets re-downloaded.
+- Don't look for a match from 3 days ago: finished retention is configurable ("Keep finished"); at 0, finished matches are hidden.
+- Don't panic over `FAIL http=-1` in the logs: that's the phone's network hiccuping, the app retries with the old cache meanwhile.
 
-## Dépannage rapide
+## Quick troubleshooting
 
-- **Widget vide** : vérifie que tu as au moins une équipe ou ligue en favoris, puis ⟳ une fois et attends.
-- **Un match manque** : vérifie qu'il est dans une compétition couverte (voir tableau), et que sa source est activée avec sa clé.
-- **Scores pas à jour** : ⟳ une fois. L'auto-refresh tourne toutes les 15 min minimum (limite Android).
-- **Voir ce qui se passe** : dans l'app, la carte sync + les logs montrent chaque appel (ligues OK, matchs affichés/masqués).
+- **Empty widget**: make sure you have at least one team or league favorited, then ⟳ once and wait.
+- **A match is missing**: check it's in a covered competition (see table), and that its source is enabled with its key.
+- **Scores not fresh**: ⟳ once. Auto-refresh runs every 15 min minimum (Android limit).
+- **See what's going on**: in the app, the sync card + logs show every call (leagues OK, matches shown/hidden).
 
-## Technique (pour les curieux)
+## Technical notes (for the curious)
 
-- 100 % cloud : chaque push sur `main` compile l'APK via GitHub Actions, chaque tag `v*` publie une Release avec l'APK.
-- Détails des APIs et du pipeline : voir [APIS.md](APIS.md).
+- 100% cloud: every push to `main` builds the APK via GitHub Actions, every `v*` tag publishes a Release with the APK.
+- API and pipeline details: see [APIS.md](APIS.md).
